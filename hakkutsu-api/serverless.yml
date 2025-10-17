@@ -1,6 +1,8 @@
-# "org" ensures this Service is used with the correct Serverless Framework Access Key.
+# =========================
+# hakkutsu-api / serverless.yml
+# =========================
+
 org: taiyoyamadahackathon
-# "service" is the name of this project. This will also be added to your AWS resource names.
 service: hakkutsu-api
 
 stages:
@@ -11,11 +13,14 @@ stages:
 provider:
   name: aws
   runtime: nodejs20.x
+
+  # ✅ v4以降は CORS をここにまとめて書く！
   httpApi:
     cors:
       allowedOrigins:
-        - "https://hakkutsu-1tmea49bc-tai09to06y-3264s-projects.vercel.app"
-        - "http://localhost:3000"
+        - "https://hakkutsu-8u8105n1c-tai09to06y-3264s-projects.vercel.app" # 本番
+        - "https://hakkutsu-git-develop-tai09to06y-3264s-projects.vercel.app" # 開発
+        - "http://localhost:3000" # ローカル
       allowedHeaders:
         - Content-Type
       allowedMethods:
@@ -24,6 +29,8 @@ provider:
         - POST
         - PUT
         - DELETE
+
+  # DynamoDB へのアクセス権限
   iam:
     role:
       statements:
@@ -37,6 +44,8 @@ provider:
             - dynamodb:DeleteItem
           Resource:
             - Fn::GetAtt: [UsersTable, Arn]
+
+  # 環境変数
   environment:
     USERS_TABLE: ${param:tableName}
 
@@ -47,20 +56,6 @@ functions:
       - httpApi:
           path: /
           method: any
-          cors:
-            allowedOrigins:
-              - 'https://hakkutsu-8u8105n1c-tai09to06y-3264s-projects.vercel.app' # ← 本番
-              - 'https://hakkutsu-git-develop-tai09to06y-3264s-projects.vercel.app' # ← developプレビュー
-              - 'http://localhost:3000' # ← ローカル開発
-            allowedHeaders:
-              - Content-Type
-            allowedMethods:
-              - OPTIONS
-              - GET
-              - POST
-              - PUT
-              - DELETE
-
 
 resources:
   Resources:
