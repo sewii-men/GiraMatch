@@ -47,6 +47,20 @@ functions:
       - httpApi:
           path: /
           method: any
+          cors:
+            allowedOrigins:
+              - 'https://hakkutsu-8u8105n1c-tai09to06y-3264s-projects.vercel.app' # ← 本番
+              - 'https://hakkutsu-git-develop-tai09to06y-3264s-projects.vercel.app' # ← developプレビュー
+              - 'http://localhost:3000' # ← ローカル開発
+            allowedHeaders:
+              - Content-Type
+            allowedMethods:
+              - OPTIONS
+              - GET
+              - POST
+              - PUT
+              - DELETE
+
 
 resources:
   Resources:
