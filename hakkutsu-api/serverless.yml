@@ -11,9 +11,19 @@ stages:
 provider:
   name: aws
   runtime: nodejs20.x
-  # Uncomment to easily set up a custom domain. Read the docs for more details:
-  # https://www.serverless.com/framework/docs/providers/aws/guide/domains
-  # domain: api.example.com
+  httpApi:
+    cors:
+      allowedOrigins:
+        - "https://hakkutsu-1tmea49bc-tai09to06y-3264s-projects.vercel.app"
+        - "http://localhost:3000"
+      allowedHeaders:
+        - Content-Type
+      allowedMethods:
+        - OPTIONS
+        - GET
+        - POST
+        - PUT
+        - DELETE
   iam:
     role:
       statements:
@@ -34,7 +44,9 @@ functions:
   api:
     handler: handler.handler
     events:
-      - httpApi: "*"
+      - httpApi:
+          path: /
+          method: any
 
 resources:
   Resources:

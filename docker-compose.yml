@@ -1,0 +1,24 @@
+services:
+  api:
+    build: ./hakkutsu-api
+    ports:
+      - "4000:4000"
+    environment:
+      - USERS_TABLE=users-table-dev
+      - AWS_ACCESS_KEY_ID=dummy
+      - AWS_SECRET_ACCESS_KEY=dummy
+      - AWS_REGION=us-east-1
+    depends_on:
+      - dynamodb
+
+  dynamodb:
+    image: amazon/dynamodb-local
+    container_name: dynamodb-local
+    ports:
+      - "8000:8000"
+    command: "-jar DynamoDBLocal.jar -sharedDb"
+    volumes:
+      - dynamodb_data:/home/dynamodblocal/data
+
+volumes:
+  dynamodb_data:

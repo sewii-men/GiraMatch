@@ -1,5 +1,5 @@
+// hakkutsu-api/handler.js
 const { DynamoDBClient } = require("@aws-sdk/client-dynamodb");
-
 const {
   DynamoDBDocumentClient,
   GetCommand,
@@ -8,60 +8,59 @@ const {
 
 const express = require("express");
 const serverless = require("serverless-http");
+const cors = require("cors");
 
 const app = express();
+
+// CORS設定
+const allowedOrigins = [
+  "https://hakkutsu-1tmea49bc-tai09to06y-3264s-projects.vercel.app",
+  "http://localhost:3000",
+];
+app.use(
+  cors({
+    origin: (origin, callback) => {
+      if (!origin || allowedOrigins.includes(origin)) callback(null, true);
+      else callback(new Error("Not allowed by CORS"));
+    },
+    methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+    allowedHeaders: ["Content-Type"],
+  })
+);
+app.use(express.json());
 
 const USERS_TABLE = process.env.USERS_TABLE;
 const client = new DynamoDBClient();
 const docClient = DynamoDBDocumentClient.from(client);
 
-app.use(express.json());
-
+// 確認用エンドポイント
 app.get("/", (req, res) => {
-  res.json({ message: "Hello from Express on AWS Lambda!" });
+  res.json({ message: "Hello from Express on AWS Lambda with CORS!" });
 });
 
+// ユーザー取得
 app.get("/users/:userId", async (req, res) => {
-  const params = {
-    TableName: USERS_TABLE,
-    Key: {
-      userId: req.params.userId,
-    },
-  };
-
+  const params = { TableName: USERS_TABLE, Key: { userId: req.params.userId } };
   try {
-    const command = new GetCommand(params);
-    const { Item } = await docClient.send(command);
-    if (Item) {
-      const { userId, name } = Item;
-      res.json({ userId, name });
-    } else {
-      res
-        .status(404)
-        .json({ error: 'Could not find user with provided "userId"' });
-    }
+    const { Item } = await docClient.send(new GetCommand(params));
+    if (Item) res.json(Item);
+    else res.status(404).json({ error: "User not found" });
   } catch (error) {
-    console.log(error);
+    console.error(error);
     res.status(500).json({ error: "Could not retrieve user" });
   }
 });
 
+// ユーザー登録
 app.post("/users", async (req, res) => {
   const { userId, name } = req.body;
-  if (typeof userId !== "string") {
-    res.status(400).json({ error: '"userId" must be a string' });
-  } else if (typeof name !== "string") {
-    res.status(400).json({ error: '"name" must be a string' });
-  }
-
-  const params = {
-    TableName: USERS_TABLE,
-    Item: { userId, name },
-  };
+  if (!userId || !name)
+    return res.status(400).json({ error: "userId and name are required" });
 
   try {
-    const command = new PutCommand(params);
-    await docClient.send(command);
+    await docClient.send(
+      new PutCommand({ TableName: USERS_TABLE, Item: { userId, name } })
+    );
     res.json({ userId, name });
   } catch (error) {
     console.error(error);
@@ -69,10 +68,7 @@ app.post("/users", async (req, res) => {
   }
 });
 
-app.use((req, res, next) => {
-  return res.status(404).json({
-    error: "Not Found",
-  });
-});
+app.use((req, res) => res.status(404).json({ error: "Not Found" }));
 
 exports.handler = serverless(app);
+module.exports.app = app; // local用にexport

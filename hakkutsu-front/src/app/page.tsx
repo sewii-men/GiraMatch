@@ -1,30 +1,30 @@
-'use client';
+"use client";
 
-import { useState } from 'react';
+import { useState } from "react";
 
 export default function Home() {
-  const [data, setData] = useState<string>('まだデータはありません');
+  const [response, setResponse] = useState("");
 
-  const callLambda = async () => {
+  const callApi = async () => {
     try {
-      const res = await fetch('https://5xywj8jy0c.execute-api.us-east-1.amazonaws.com/');
-      const text = await res.text();
-      setData(text);
-    } catch (error) {
-      setData('エラーが発生しました: ' + (error as Error).message);
+      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/`);
+      const data = await res.json();
+      setResponse(data.message);
+    } catch (e) {
+      setResponse("Failed to fetch");
     }
   };
 
   return (
-    <main className="p-10">
-      <h1 className="text-2xl font-bold mb-4">Lambda × Next.js 接続テスト</h1>
+    <main className="flex flex-col items-center justify-center min-h-screen p-8">
+      <h1 className="text-3xl font-bold mb-6">Hakkutsu Front</h1>
       <button
-        className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
-        onClick={callLambda}
+        onClick={callApi}
+        className="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700"
       >
         Call Lambda
       </button>
-      <pre className="mt-4">{data}</pre>
+      <p className="mt-6 text-gray-700">{response}</p>
     </main>
   );
 }
