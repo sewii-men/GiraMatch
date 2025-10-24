@@ -7,6 +7,11 @@ stages:
   default:
     params:
       tableName: "users-table-${sls:stage}"
+      matchesTableName: "matches-table-${sls:stage}"
+      chatsTableName: "chats-table-${sls:stage}"
+      messagesTableName: "messages-table-${sls:stage}"
+      checkinsTableName: "checkins-table-${sls:stage}"
+      reviewsTableName: "reviews-table-${sls:stage}"
 
 provider:
   name: aws
@@ -37,8 +42,19 @@ provider:
             - dynamodb:DeleteItem
           Resource:
             - Fn::GetAtt: [UsersTable, Arn]
+            - Fn::GetAtt: [MatchesTable, Arn]
+            - Fn::GetAtt: [ChatsTable, Arn]
+            - Fn::GetAtt: [MessagesTable, Arn]
+            - Fn::GetAtt: [CheckinsTable, Arn]
+            - Fn::GetAtt: [ReviewsTable, Arn]
   environment:
     USERS_TABLE: ${param:tableName}
+    MATCHES_TABLE: ${param:matchesTableName}
+    CHATS_TABLE: ${param:chatsTableName}
+    MESSAGES_TABLE: ${param:messagesTableName}
+    CHECKINS_TABLE: ${param:checkinsTableName}
+    REVIEWS_TABLE: ${param:reviewsTableName}
+    JWT_SECRET: ${env:JWT_SECRET, 'change-me-in-prod'}
 
 functions:
   api:
@@ -75,3 +91,71 @@ resources:
             KeyType: HASH
         BillingMode: PAY_PER_REQUEST
         TableName: ${param:tableName}
+
+    MatchesTable:
+      Type: AWS::DynamoDB::Table
+      Properties:
+        AttributeDefinitions:
+          - AttributeName: matchId
+            AttributeType: S
+        KeySchema:
+          - AttributeName: matchId
+            KeyType: HASH
+        BillingMode: PAY_PER_REQUEST
+        TableName: ${param:matchesTableName}
+
+    ChatsTable:
+      Type: AWS::DynamoDB::Table
+      Properties:
+        AttributeDefinitions:
+          - AttributeName: chatId
+            AttributeType: S
+        KeySchema:
+          - AttributeName: chatId
+            KeyType: HASH
+        BillingMode: PAY_PER_REQUEST
+        TableName: ${param:chatsTableName}
+
+    MessagesTable:
+      Type: AWS::DynamoDB::Table
+      Properties:
+        AttributeDefinitions:
+          - AttributeName: chatId
+            AttributeType: S
+          - AttributeName: messageId
+            AttributeType: S
+        KeySchema:
+          - AttributeName: chatId
+            KeyType: HASH
+          - AttributeName: messageId
+            KeyType: RANGE
+        BillingMode: PAY_PER_REQUEST
+        TableName: ${param:messagesTableName}
+
+    CheckinsTable:
+      Type: AWS::DynamoDB::Table
+      Properties:
+        AttributeDefinitions:
+          - AttributeName: matchId
+            AttributeType: S
+          - AttributeName: userId
+            AttributeType: S
+        KeySchema:
+          - AttributeName: matchId
+            KeyType: HASH
+          - AttributeName: userId
+            KeyType: RANGE
+        BillingMode: PAY_PER_REQUEST
+        TableName: ${param:checkinsTableName}
+
+    ReviewsTable:
+      Type: AWS::DynamoDB::Table
+      Properties:
+        AttributeDefinitions:
+          - AttributeName: reviewId
+            AttributeType: S
+        KeySchema:
+          - AttributeName: reviewId
+            KeyType: HASH
+        BillingMode: PAY_PER_REQUEST
+        TableName: ${param:reviewsTableName}

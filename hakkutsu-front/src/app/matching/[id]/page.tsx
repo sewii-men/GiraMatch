@@ -2,52 +2,34 @@
 
 import Link from "next/link";
 import { useParams, useSearchParams } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import AuthGuard from "@/components/AuthGuard";
+import { useAuth } from "@/lib/auth";
 
-// モックデータ
-const candidates = [
-  {
-    id: 1,
-    nickname: "サッカー太郎",
-    icon: "⚽",
-    style: "声出し応援",
-    seat: "ゴール裏",
-    trustScore: 4.8,
-    matchRate: 95,
-    bio: "毎試合欠かさず応援しています!",
-  },
-  {
-    id: 2,
-    nickname: "応援花子",
-    icon: "🎺",
-    style: "声出し応援",
-    seat: "ゴール裏",
-    trustScore: 4.6,
-    matchRate: 88,
-    bio: "一緒に盛り上がりましょう!",
-  },
-  {
-    id: 3,
-    nickname: "ギラサポ次郎",
-    icon: "🔥",
-    style: "声出し応援",
-    seat: "ゴール裏",
-    trustScore: 4.9,
-    matchRate: 92,
-    bio: "熱く応援したい方歓迎!",
-  },
-];
+type Candidate = {
+  id: string;
+  nickname: string;
+  icon?: string;
+  style?: string;
+  seat?: string;
+  trustScore?: number;
+  matchRate?: number;
+  bio?: string;
+};
 
 export default function MatchingPage() {
   const params = useParams();
   const searchParams = useSearchParams();
   const matchId = params.id;
   const mode = searchParams.get("mode") || "recruit";
+  const { token } = useAuth();
 
   const [step, setStep] = useState(1);
   const [selectedStyle, setSelectedStyle] = useState("");
   const [selectedSeat, setSelectedSeat] = useState("");
-  const [requestSent, setRequestSent] = useState<number[]>([]);
+  const [requestSent, setRequestSent] = useState<string[]>([]);
+  const [candidates, setCandidates] = useState<Candidate[]>([]);
+  const [loading, setLoading] = useState(false);
 
   const styles = ["声出し応援", "静かに観戦", "写真撮影メイン", "ファミリー向け"];
   const seats = ["ゴール裏", "メインスタンド", "バックスタンド", "どこでもOK"];
@@ -60,14 +42,33 @@ export default function MatchingPage() {
     }
   };
 
-  const handleSendRequest = (candidateId: number) => {
+  const handleSendRequest = (candidateId: string) => {
     setRequestSent([...requestSent, candidateId]);
   };
 
+  useEffect(() => {
+    if (step === 3) {
+      (async () => {
+        setLoading(true);
+        try {
+          const base = process.env.NEXT_PUBLIC_API_URL;
+          const res = await fetch(`${base}/matching/candidates`, {
+            headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+          });
+          const data = await res.json();
+          setCandidates(data);
+        } finally {
+          setLoading(false);
+        }
+      })();
+    }
+  }, [step, token]);
+
   return (
     <div className="min-h-screen bg-gradient-to-b from-yellow-400 via-yellow-300 to-white">
+      <AuthGuard />
       {/* ヘッダー */}
-      <header className="bg-black text-white py-4 px-6 shadow-lg">
+      <header className="bg-black text-white py-4 px-6 shadow-lg hidden">
         <div className="max-w-6xl mx-auto flex items-center justify-between">
           <Link href="/">
             <h1 className="text-2xl font-bold cursor-pointer">
@@ -233,10 +234,11 @@ export default function MatchingPage() {
                 </div>
               </div>
 
-              {/* 候補者リスト */}
-              <div className="space-y-4">
-                {candidates.map((candidate) => (
-                  <div
+          {/* 候補者リスト */}
+          {loading && <p className="text-center text-gray-700">読み込み中...</p>}
+          <div className="space-y-4">
+            {candidates.map((candidate) => (
+              <div
                     key={candidate.id}
                     className="bg-white border-2 border-yellow-400 rounded-lg p-6 shadow-md"
                   >
@@ -286,7 +288,7 @@ export default function MatchingPage() {
                     )}
                   </div>
                 ))}
-              </div>
+          </div>
 
               {/* チャットへ移動ボタン */}
               {requestSent.length > 0 && (

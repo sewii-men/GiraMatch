@@ -1,55 +1,61 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import AuthGuard from "@/components/AuthGuard";
+import { useAuth } from "@/lib/auth";
 
-// モックデータ
-const upcomingMatches = [
-  {
-    id: 1,
-    date: "2025/03/15 (土)",
-    time: "14:00 キックオフ",
-    opponent: "vs アビスパ福岡",
-    venue: "ミクニワールドスタジアム北九州",
-    partner: {
-      id: 1,
-      name: "サッカー太郎",
-      icon: "⚽",
-      checkedIn: false,
-    },
-    myCheckIn: false,
-  },
-  {
-    id: 2,
-    date: "2025/03/22 (土)",
-    time: "15:00 キックオフ",
-    opponent: "vs V・ファーレン長崎",
-    venue: "ミクニワールドスタジアム北九州",
-    partner: {
-      id: 2,
-      name: "応援花子",
-      icon: "🎺",
-      checkedIn: true,
-    },
-    myCheckIn: false,
-  },
-];
+type CheckMatch = {
+  id: string;
+  date: string;
+  time: string;
+  opponent: string;
+  venue: string;
+  partner: { id: string; name: string; icon?: string };
+  myCheckIn: boolean;
+  partnerCheckedIn?: boolean;
+};
 
 export default function CheckInPage() {
-  const [matches, setMatches] = useState(upcomingMatches);
+  const { token, userId } = useAuth();
+  const [matches, setMatches] = useState<CheckMatch[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
-  const handleCheckIn = (matchId: number) => {
-    setMatches(
-      matches.map((match) =>
-        match.id === matchId ? { ...match, myCheckIn: true } : match
-      )
-    );
+  const fetchList = async () => {
+    try {
+      const base = process.env.NEXT_PUBLIC_API_URL;
+      const res = await fetch(`${base}/check-ins?userId=${encodeURIComponent(userId || "")}`, {
+        headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+      });
+      const data = await res.json();
+      setMatches(data);
+    } catch (e) {
+      setError("来場チェックの取得に失敗しました");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchList();
+  }, [token, userId]);
+
+  const handleCheckIn = async (matchId: string) => {
+    const base = process.env.NEXT_PUBLIC_API_URL;
+    await fetch(`${base}/check-ins`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+      body: JSON.stringify({ matchId, userId: userId || "", checkedIn: true }),
+    });
+    await fetchList();
   };
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-yellow-400 via-yellow-300 to-white">
       {/* ヘッダー */}
-      <header className="bg-black text-white py-4 px-6 shadow-lg">
+      <AuthGuard />
+      <header className="bg-black text-white py-4 px-6 shadow-lg hidden">
         <div className="max-w-6xl mx-auto flex items-center justify-between">
           <Link href="/">
             <h1 className="text-2xl font-bold cursor-pointer">
@@ -81,6 +87,8 @@ export default function CheckInPage() {
           </p>
 
           {/* マッチ済み試合リスト */}
+          {loading && <p className="text-center text-gray-700">読み込み中...</p>}
+          {error && <p className="text-center text-red-600">{error}</p>}
           <div className="space-y-6">
             {matches.map((match) => (
               <div
@@ -105,7 +113,7 @@ export default function CheckInPage() {
                   <p className="text-sm text-gray-600 mb-2">同行者</p>
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-3">
-                      <div className="text-3xl">{match.partner.icon}</div>
+                      <div className="text-3xl">{match.partner.icon || "🙂"}</div>
                       <div>
                         <p className="font-bold text-black">
                           {match.partner.name}

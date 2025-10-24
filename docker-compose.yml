@@ -5,6 +5,13 @@ services:
       - "4000:4000"
     environment:
       - USERS_TABLE=users-table-dev
+      - MATCHES_TABLE=matches-table-dev
+      - CHATS_TABLE=chats-table-dev
+      - MESSAGES_TABLE=messages-table-dev
+      - CHECKINS_TABLE=checkins-table-dev
+      - REVIEWS_TABLE=reviews-table-dev
+      - JWT_SECRET=dev-secret
+      - DYNAMODB_LOCAL_URL=http://dynamodb:8000
       - AWS_ACCESS_KEY_ID=dummy
       - AWS_SECRET_ACCESS_KEY=dummy
       - AWS_REGION=us-east-1

@@ -2,25 +2,44 @@
 
 import Link from "next/link";
 import { useParams } from "next/navigation";
+import { useEffect, useState } from "react";
 
 export default function MatchDetailPage() {
   const params = useParams();
   const matchId = params.id;
 
-  // モックデータ
-  const match = {
-    id: matchId,
-    date: "2025/03/15 (土)",
-    time: "14:00 キックオフ",
-    opponent: "vs アビスパ福岡",
-    venue: "ミクニワールドスタジアム北九州",
-    description: "九州ダービー!熱い戦いが期待される一戦です。",
-  };
+  const [match, setMatch] = useState<{
+    matchId: string;
+    date: string;
+    time: string;
+    opponent: string;
+    venue: string;
+    description?: string;
+  } | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    const load = async () => {
+      try {
+        const base = process.env.NEXT_PUBLIC_API_URL;
+        const res = await fetch(`${base}/matches/${matchId}`);
+        if (!res.ok) throw new Error("failed");
+        const data = await res.json();
+        setMatch(data);
+      } catch (e) {
+        setError("試合情報の取得に失敗しました");
+      } finally {
+        setLoading(false);
+      }
+    };
+    load();
+  }, [matchId]);
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-yellow-400 via-yellow-300 to-white">
       {/* ヘッダー */}
-      <header className="bg-black text-white py-4 px-6 shadow-lg">
+      <header className="bg-black text-white py-4 px-6 shadow-lg hidden">
         <div className="max-w-6xl mx-auto flex items-center justify-between">
           <Link href="/">
             <h1 className="text-2xl font-bold cursor-pointer">
@@ -52,21 +71,23 @@ export default function MatchDetailPage() {
             <span>←</span> 試合一覧に戻る
           </Link>
 
+          {loading && <p className="text-center text-gray-700">読み込み中...</p>}
+          {error && <p className="text-center text-red-600">{error}</p>}
           {/* 試合情報カード */}
           <div className="bg-white border-2 border-yellow-400 rounded-lg p-8 shadow-lg mb-8">
             <div className="text-center mb-6">
               <h2 className="text-4xl font-bold text-black mb-4">
-                {match.opponent}
+                {match?.opponent}
               </h2>
               <p className="text-xl text-gray-700 mb-2">
-                <span className="font-bold">{match.date}</span> {match.time}
+                <span className="font-bold">{match?.date}</span> {match?.time}
               </p>
               <p className="text-gray-600 flex items-center justify-center gap-2">
-                <span>📍</span> {match.venue}
+                <span>📍</span> {match?.venue}
               </p>
             </div>
             <div className="bg-yellow-50 p-4 rounded-lg mb-6">
-              <p className="text-gray-700 text-center">{match.description}</p>
+              <p className="text-gray-700 text-center">{match?.description}</p>
             </div>
             <div className="flex gap-4 justify-center">
               <div className="text-center">
