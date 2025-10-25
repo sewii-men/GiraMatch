@@ -22,7 +22,7 @@ jobs:
           node-version: 20
 
       - name: Install deps
-        working-directory: hakkutsu-fron
+        working-directory: hakkutsu-front
         run: npm ci
 
       - name: Determine stage
