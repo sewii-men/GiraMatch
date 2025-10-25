@@ -1,8 +1,240 @@
 "use client";
 
 import Link from "next/link";
+import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
+
+interface Match {
+  matchId: string;
+  date: string;
+  time: string;
+  opponent: string;
+  venue: string;
+  status: string;
+}
+
+interface Chat {
+  chatId: string;
+  matchId: string;
+  partner: {
+    id: string;
+    name: string;
+    icon: string;
+  };
+}
+
+interface CheckIn {
+  id: string;
+  date: string;
+  time: string;
+  opponent: string;
+  myCheckIn: boolean;
+  partnerCheckedIn: boolean;
+}
 
 export default function Home() {
+  const [isLoggedIn, setIsLoggedIn] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [userName, setUserName] = useState("");
+  const [upcomingMatches, setUpcomingMatches] = useState<Match[]>([]);
+  const [activeChats, setActiveChats] = useState<Chat[]>([]);
+  const [pendingCheckIns, setPendingCheckIns] = useState<CheckIn[]>([]);
+  const router = useRouter();
+
+  useEffect(() => {
+    const token = localStorage.getItem("token");
+    const userId = localStorage.getItem("userId");
+
+    if (token && userId) {
+      setIsLoggedIn(true);
+      setUserName(userId);
+      fetchDashboardData(token);
+    } else {
+      setLoading(false);
+    }
+  }, []);
+
+  const fetchDashboardData = async (token: string) => {
+    try {
+      const base = process.env.NEXT_PUBLIC_API_URL;
+
+      // 試合一覧取得
+      const matchesRes = await fetch(`${base}/matches`);
+      const matchesData = await matchesRes.json();
+      const upcoming = matchesData
+        .filter((m: Match) => m.status === "募集中" || m.status === "scheduled")
+        .slice(0, 3);
+      setUpcomingMatches(upcoming);
+
+      // チャット一覧取得
+      const chatsRes = await fetch(`${base}/chats`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (chatsRes.ok) {
+        const chatsData = await chatsRes.json();
+        setActiveChats(chatsData.slice(0, 3));
+      }
+
+      // 来場チェック一覧取得
+      const checkInsRes = await fetch(`${base}/check-ins`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (checkInsRes.ok) {
+        const checkInsData = await checkInsRes.json();
+        const pending = checkInsData.filter((c: CheckIn) => !c.myCheckIn);
+        setPendingCheckIns(pending.slice(0, 3));
+      }
+    } catch (error) {
+      console.error("Failed to fetch dashboard data:", error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-gradient-to-b from-yellow-400 via-yellow-300 to-white flex items-center justify-center">
+        <p className="text-xl text-gray-800">読み込み中...</p>
+      </div>
+    );
+  }
+
+  if (isLoggedIn) {
+    return (
+      <div className="min-h-screen bg-gradient-to-b from-yellow-400 via-yellow-300 to-white">
+        {/* ダッシュボード */}
+        <div className="max-w-6xl mx-auto px-6 py-12">
+          {/* ウェルカムメッセージ */}
+          <div className="mb-8">
+            <h1 className="text-4xl font-bold text-black mb-2">
+              おかえりなさい、{userName}さん
+            </h1>
+            <p className="text-gray-700">今日もギラヴァンツを応援しましょう！</p>
+          </div>
+
+          {/* クイックアクション */}
+          <div className="grid md:grid-cols-2 gap-6 mb-12">
+            <Link
+              href="/matches"
+              className="bg-red-600 text-white p-6 rounded-xl shadow-lg hover:bg-red-700 transition"
+            >
+              <div className="text-3xl mb-2">⚽</div>
+              <h3 className="text-xl font-bold mb-1">試合を探す</h3>
+              <p className="text-sm opacity-90">新しい仲間と観戦しよう</p>
+            </Link>
+            <Link
+              href="/chat"
+              className="bg-white text-black p-6 rounded-xl shadow-lg hover:bg-gray-50 transition border-2 border-yellow-400"
+            >
+              <div className="text-3xl mb-2">💬</div>
+              <h3 className="text-xl font-bold mb-1">チャット</h3>
+              <p className="text-sm text-gray-600">マッチした仲間と話そう</p>
+            </Link>
+          </div>
+
+          {/* 近日開催の試合 */}
+          <div className="bg-white rounded-xl shadow-lg p-6 mb-6">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-2xl font-bold text-black">近日開催の試合</h2>
+              <Link href="/matches" className="text-red-600 font-bold hover:underline">
+                すべて見る
+              </Link>
+            </div>
+            {upcomingMatches.length > 0 ? (
+              <div className="space-y-3">
+                {upcomingMatches.map((match) => (
+                  <Link
+                    key={match.matchId}
+                    href={`/matching/${match.matchId}`}
+                    className="block p-4 border-2 border-gray-200 rounded-lg hover:border-yellow-400 transition"
+                  >
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="font-bold text-black">{match.opponent}</p>
+                        <p className="text-sm text-gray-600">
+                          {match.date} {match.time}
+                        </p>
+                      </div>
+                      <div className="text-red-600 font-bold text-sm">
+                        {match.status}
+                      </div>
+                    </div>
+                  </Link>
+                ))}
+              </div>
+            ) : (
+              <p className="text-gray-600 text-center py-4">近日開催の試合はありません</p>
+            )}
+          </div>
+
+          {/* 進行中のチャット */}
+          <div className="bg-white rounded-xl shadow-lg p-6 mb-6">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-2xl font-bold text-black">進行中のチャット</h2>
+              <Link href="/chat" className="text-red-600 font-bold hover:underline">
+                すべて見る
+              </Link>
+            </div>
+            {activeChats.length > 0 ? (
+              <div className="space-y-3">
+                {activeChats.map((chat) => (
+                  <Link
+                    key={chat.chatId}
+                    href={`/chat/${chat.chatId}`}
+                    className="block p-4 border-2 border-gray-200 rounded-lg hover:border-yellow-400 transition"
+                  >
+                    <div className="flex items-center gap-3">
+                      <div className="text-2xl">{chat.partner.icon}</div>
+                      <div>
+                        <p className="font-bold text-black">{chat.partner.name}</p>
+                        <p className="text-sm text-gray-600">クリックしてメッセージを見る</p>
+                      </div>
+                    </div>
+                  </Link>
+                ))}
+              </div>
+            ) : (
+              <p className="text-gray-600 text-center py-4">進行中のチャットはありません</p>
+            )}
+          </div>
+
+          {/* 来場チェックが必要な試合 */}
+          {pendingCheckIns.length > 0 && (
+            <div className="bg-yellow-50 rounded-xl shadow-lg p-6 border-2 border-yellow-400">
+              <div className="flex items-center justify-between mb-4">
+                <h2 className="text-2xl font-bold text-black">来場チェックが必要な試合</h2>
+                <Link href="/check-in" className="text-red-600 font-bold hover:underline">
+                  すべて見る
+                </Link>
+              </div>
+              <div className="space-y-3">
+                {pendingCheckIns.map((checkIn) => (
+                  <Link
+                    key={checkIn.id}
+                    href="/check-in"
+                    className="block p-4 bg-white rounded-lg hover:bg-gray-50 transition"
+                  >
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="font-bold text-black">{checkIn.opponent}</p>
+                        <p className="text-sm text-gray-600">
+                          {checkIn.date} {checkIn.time}
+                        </p>
+                      </div>
+                      <div className="bg-red-600 text-white px-3 py-1 rounded-full text-sm font-bold">
+                        チェックイン
+                      </div>
+                    </div>
+                  </Link>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-gradient-to-b from-yellow-400 via-yellow-300 to-white">
       {/* ヘッダー */}

@@ -1,10 +1,17 @@
 "use client";
 
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 import { useAuth } from "@/lib/auth";
 
 export default function NavBar() {
+  const pathname = usePathname();
   const { token, userId, logout } = useAuth();
+
+  // 管理者画面ではNavBarを表示しない
+  if (pathname?.startsWith("/admin")) {
+    return null;
+  }
 
   return (
     <header className="bg-black text-white py-4 px-6 shadow-lg">
