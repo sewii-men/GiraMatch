@@ -169,6 +169,32 @@ export default function Home() {
             </Link>
           </div>
 
+          {/* テスト用: ギラ飲みチャット */}
+          <div className="bg-gradient-to-r from-orange-400 to-red-500 rounded-xl shadow-lg p-6 mb-8 border-4 border-yellow-400">
+            <div className="flex items-center justify-between">
+              <div>
+                <div className="flex items-center gap-2 mb-2">
+                  <span className="bg-yellow-400 text-black px-3 py-1 rounded-full text-xs font-bold">
+                    テスト機能
+                  </span>
+                </div>
+                <h2 className="text-2xl font-bold text-white mb-2">
+                  ギラ飲みチャット（試験運用中）
+                </h2>
+                <p className="text-white text-sm opacity-90 mb-4">
+                  試合後に近くの居酒屋で交流しよう！このボタンでテスト画面にアクセスできます。
+                </p>
+              </div>
+              <div className="text-6xl">🍺</div>
+            </div>
+            <Link
+              href="/post-match-chat/test_match_001"
+              className="block w-full bg-white text-red-600 py-4 rounded-full font-bold hover:bg-gray-100 transition text-center text-lg shadow-lg"
+            >
+              ギラ飲みチャットを開く（テスト）
+            </Link>
+          </div>
+
           {/* 近日開催の試合 */}
           <div className="bg-white rounded-xl shadow-lg p-6 mb-6">
             <div className="flex items-center justify-between mb-4">
