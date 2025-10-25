@@ -1,0 +1,24 @@
+{
+  "matches": [
+    {
+      "matchId": "2025-03-15-kkj-vs-avispa",
+      "date": "2025/03/15 (土)",
+      "time": "14:00 キックオフ",
+      "opponent": "vs アビスパ福岡",
+      "venue": "ミクニワールドスタジアム北九州",
+      "status": "scheduled",
+      "description": "九州ダービー。ホームでの開幕戦。"
+    },
+    {
+      "matchId": "2025-03-22-kkj-vs-vvaren",
+      "date": "2025/03/22 (土)",
+      "time": "15:00 キックオフ",
+      "opponent": "vs V・ファーレン長崎",
+      "venue": "ミクニワールドスタジアム北九州",
+      "status": "scheduled",
+      "description": "注目の一戦。"
+    }
+  ],
+  "users": []
+}
+
