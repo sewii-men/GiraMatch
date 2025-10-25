@@ -8,8 +8,11 @@ on:
 jobs:
   vercel-deploy:
     runs-on: ubuntu-latest
-    # 既定の作業場所は $GITHUB_WORKSPACE（= /home/runner/work/<repo>/<repo>）
-    # ここでは working-directory を省略（= .）
+    # (補足) もし package.json がサブディレクトリ（例: frontend/）にある場合は、
+    # 以下の working-directory のコメントアウトを解除してください。
+    # defaults:
+    #   run:
+    #     working-directory: ./frontend
 
     env:
       VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
@@ -20,28 +23,27 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Debug CWD
+      - name: Debug CWD (確認用)
         run: pwd && ls -la
+        # (補足) サブディレクトリの場合:
+        # working-directory: ./frontend 
 
       - uses: actions/setup-node@v4
         with:
           node-version: 20
 
       - name: Install deps
-        run: npm ci
+        # package-lock.json がないため npm install に変更（非推奨）
+        # ※ 根本解決は package-lock.json をリポジトリにコミットすることです。
+        run: npm install
+        # (補足) サブディレクトリの場合:
+        # working-directory: ./frontend
 
       - name: Determine stage
         id: stg
         run: |
           if [ "${{ github.ref_name }}" = "main" ]; then STAGE='prod'; else STAGE='dev'; fi
           echo "stage=$STAGE" >> $GITHUB_OUTPUT
-
-      - name: Debug current directory
-        run: |
-          pwd
-          ls -la
-          ls -la ./hakkutsu-front || true
-
 
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
@@ -65,16 +67,10 @@ jobs:
           fi
           echo "url=$URL" >> "$GITHUB_OUTPUT"
 
-      - name: (Optional) Vercel pull
-        # リモートビルドのみの場合は省略可
-        run: |
-          if [ "${{ github.ref_name }}" = "main" ]; then
-            npx vercel pull --yes --environment=production --token="$VERCEL_TOKEN" ${VERCEL_SCOPE:+--scope="$VERCEL_SCOPE"}
-          else
-            npx vercel pull --yes --environment=preview --token="$VERCEL_TOKEN" ${VERCEL_SCOPE:+--scope="$VERCEL_SCOPE"}
-          fi
+      # Vercelのリモートビルド（`npx vercel deploy`）を利用する場合、
+      # 'vercel pull' ステップは不要なことが多いため削除しました。
 
-      - name: Deploy
+      - name: Deploy to Vercel
         env:
           NEXT_PUBLIC_API_URL: ${{ steps.api.outputs.url }}
         run: |
@@ -83,8 +79,12 @@ jobs:
             echo "::error::NEXT_PUBLIC_API_URL is empty"
             exit 1
           fi
+          
+          # ユーザーの元のロジックを維持 (VERCEL_SCOPE があれば --scope を付与)
           if [ "${{ github.ref_name }}" = "main" ]; then
             npx vercel deploy --prod --yes --token="$VERCEL_TOKEN" ${VERCEL_SCOPE:+--scope="$VERCEL_SCOPE"} --env NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL
           else
             npx vercel deploy --yes --token="$VERCEL_TOKEN" ${VERCEL_SCOPE:+--scope="$VERCEL_SCOPE"} --env NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL
           fi
+        # (補足) サブディレクトリの場合:
+        # working-directory: ./frontend
