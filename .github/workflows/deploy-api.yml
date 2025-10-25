@@ -37,6 +37,10 @@ jobs:
             if [ "${{ github.ref_name }}" = "main" ]; then STAGE='prod'; else STAGE='dev'; fi
           fi
           echo "stage=$STAGE" >> $GITHUB_OUTPUT
+
+      - name: Install Serverless Framework v3
+        run: npm install -g serverless@3.38.0
+
       - name: Deploy
         env:
           # Prefer stage-specific allowed origins from secrets, fallback to default in serverless.yml
