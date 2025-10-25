@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
+import { apiBase } from "@/lib/apiBase";
 
 interface User {
   userId: string;
@@ -30,7 +31,7 @@ export default function UsersAdmin() {
 
   const fetchUsers = async () => {
     try {
-      const base = process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000";
+      const base = apiBase();
       const token = localStorage.getItem("token");
 
       const res = await fetch(`${base}/admin/users`, {

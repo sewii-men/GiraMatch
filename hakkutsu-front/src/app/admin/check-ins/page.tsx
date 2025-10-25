@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { apiBase } from "@/lib/apiBase";
 
 interface CheckIn {
   matchId: string;
@@ -33,7 +34,7 @@ export default function CheckInsAdmin() {
 
   const fetchCheckIns = async () => {
     try {
-      const base = process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000";
+      const base = apiBase();
       const token = localStorage.getItem("token");
 
       const res = await fetch(`${base}/admin/check-ins`, {
@@ -54,7 +55,7 @@ export default function CheckInsAdmin() {
 
   const fetchDuplicates = async () => {
     try {
-      const base = process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000";
+      const base = apiBase();
       const token = localStorage.getItem("token");
 
       const res = await fetch(`${base}/admin/check-ins/duplicates`, {
@@ -74,7 +75,7 @@ export default function CheckInsAdmin() {
     if (!confirm("本当に削除しますか？")) return;
 
     try {
-      const base = process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000";
+      const base = apiBase();
       const token = localStorage.getItem("token");
 
       const res = await fetch(`${base}/admin/check-ins/${matchId}/${userId}`, {

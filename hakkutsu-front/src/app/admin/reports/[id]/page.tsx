@@ -2,6 +2,7 @@
 
 import { useParams, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
+import { apiBase } from "@/lib/apiBase";
 
 interface Report {
   reportId: string;
@@ -35,7 +36,7 @@ export default function ReportDetail() {
 
   const fetchReport = async () => {
     try {
-      const base = process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000";
+      const base = apiBase();
       const token = localStorage.getItem("token");
 
       const res = await fetch(`${base}/admin/reports/${reportId}`, {
@@ -62,7 +63,7 @@ export default function ReportDetail() {
     setError("");
 
     try {
-      const base = process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000";
+      const base = apiBase();
       const token = localStorage.getItem("token");
 
       const res = await fetch(`${base}/admin/reports/${reportId}/actions`, {
@@ -94,7 +95,7 @@ export default function ReportDetail() {
     setError("");
 
     try {
-      const base = process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000";
+      const base = apiBase();
       const token = localStorage.getItem("token");
 
       const res = await fetch(`${base}/admin/reports/${reportId}`, {

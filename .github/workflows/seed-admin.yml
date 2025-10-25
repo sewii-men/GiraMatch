@@ -1,0 +1,32 @@
+name: Seed Admin User
+
+on:
+  workflow_dispatch:
+    inputs:
+      stage:
+        description: "Stage (dev/prod)"
+        required: true
+        default: dev
+
+jobs:
+  seed:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: hakkutsu-api
+    env:
+      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      AWS_REGION: ${{ secrets.AWS_REGION || 'us-east-1' }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - run: npm ci
+      - name: Seed admin/demo to table
+        run: |
+          TABLE="users-table-${{ github.event.inputs.stage }}"
+          echo "Seeding table: $TABLE"
+          USERS_TABLE=$TABLE npm run seed-admin
+

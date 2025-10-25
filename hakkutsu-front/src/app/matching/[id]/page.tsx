@@ -5,6 +5,7 @@ import { useParams, useSearchParams } from "next/navigation";
 import { useEffect, useState } from "react";
 import AuthGuard from "@/components/AuthGuard";
 import { useAuth } from "@/lib/auth";
+import { apiBase } from "@/lib/apiBase";
 
 type Candidate = {
   id: string;
@@ -51,7 +52,7 @@ export default function MatchingPage() {
       (async () => {
         setLoading(true);
         try {
-          const base = process.env.NEXT_PUBLIC_API_URL;
+          const base = apiBase();
           const res = await fetch(`${base}/matching/candidates`, {
             headers: token ? { Authorization: `Bearer ${token}` } : undefined,
           });

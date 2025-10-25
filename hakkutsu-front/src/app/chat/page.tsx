@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import AuthGuard from "@/components/AuthGuard";
 import { useAuth } from "@/lib/auth";
+import { apiBase } from "@/lib/apiBase";
 
 type Chat = {
   chatId: string;
@@ -20,7 +21,7 @@ export default function ChatListPage() {
   useEffect(() => {
     const load = async () => {
       try {
-        const base = process.env.NEXT_PUBLIC_API_URL;
+        const base = apiBase();
         const uid = userId || "";
         const res = await fetch(`${base}/chats?userId=${encodeURIComponent(uid)}`, {
           headers: token ? { Authorization: `Bearer ${token}` } : undefined,
