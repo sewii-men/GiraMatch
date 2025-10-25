@@ -10,6 +10,7 @@ import PostMatchChat from "@/components/PostMatchChat";
 import RestaurantMap from "@/components/RestaurantMap";
 import { PostMatchChatProvider, usePostMatchChat } from "@/lib/postMatchChatContext";
 import { Restaurant, ChatMessage, PostMatchChat as PostMatchChatType } from "@/types/postMatchChat";
+import { requestNotificationPermission, showChatNotification } from "@/lib/notifications";
 
 // ダミーデータ
 const DUMMY_RESTAURANTS: Restaurant[] = [
@@ -125,13 +126,78 @@ function PostMatchChatPageContent() {
     participantCount,
     messages,
     addMessage,
+    updateMessage,
+    deleteMessage,
     attachedRestaurant,
     setAttachedRestaurant,
     restaurantShares,
+    unreadCount,
+    markAsRead,
   } = usePostMatchChat();
 
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [showMap, setShowMap] = useState(false);
+  const [timeUntilClose, setTimeUntilClose] = useState<string>("");
+
+  // ページを開いたら既読にする
+  useEffect(() => {
+    markAsRead();
+  }, [markAsRead]);
+
+  // チャット終了までの時間を計算
+  useEffect(() => {
+    const updateTimeUntilClose = () => {
+      const now = new Date();
+      const endOfDay = new Date(now);
+      endOfDay.setHours(23, 59, 59, 999);
+
+      const diff = endOfDay.getTime() - now.getTime();
+      if (diff <= 0) {
+        setTimeUntilClose("終了");
+        return;
+      }
+
+      const hours = Math.floor(diff / (1000 * 60 * 60));
+      const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
+      const seconds = Math.floor((diff % (1000 * 60)) / 1000);
+
+      setTimeUntilClose(`${hours}:${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`);
+    };
+
+    updateTimeUntilClose();
+    const interval = setInterval(updateTimeUntilClose, 1000);
+
+    return () => clearInterval(interval);
+  }, []);
+
+  // 通知権限のリクエスト
+  useEffect(() => {
+    requestNotificationPermission();
+  }, []);
+
+  // 新しいメッセージの監視と通知
+  useEffect(() => {
+    if (messages.length === 0) return;
+
+    // 最新のメッセージを取得
+    const latestMessage = messages[messages.length - 1];
+
+    // 自分のメッセージまたは削除済みメッセージは通知しない
+    if (latestMessage.userId === (userId || "current_user") || latestMessage.isDeleted) {
+      return;
+    }
+
+    // ページが非アクティブな場合のみ通知
+    if (document.hidden) {
+      showChatNotification(
+        latestMessage.nickname,
+        latestMessage.text,
+        () => {
+          window.focus();
+        }
+      );
+    }
+  }, [messages, userId]);
 
   const handleSendMessage = (text: string, restaurant?: Restaurant) => {
     const newMessage: ChatMessage = {
@@ -171,6 +237,15 @@ function PostMatchChatPageContent() {
             <p className="text-sm text-gray-300">{opponent}</p>
           </div>
           <div className="flex items-center gap-4">
+            {/* 終了までのカウントダウン */}
+            {!isClosed && timeUntilClose !== "終了" && (
+              <div className="text-right hidden md:block">
+                <p className="text-xs text-gray-400">チャット終了まで</p>
+                <p className="text-lg font-bold text-yellow-400 font-mono">
+                  {timeUntilClose}
+                </p>
+              </div>
+            )}
             <div className="text-right hidden md:block">
               <p className="text-sm text-gray-300">参加者</p>
               <p className="text-xl font-bold text-yellow-400">
@@ -195,6 +270,19 @@ function PostMatchChatPageContent() {
 
       {/* メインコンテンツ */}
       <main className="max-w-7xl mx-auto p-4 md:p-6">
+        {/* チャット終了バナー */}
+        {isClosed && (
+          <div className="bg-gradient-to-r from-red-600 to-yellow-600 text-white rounded-xl shadow-lg p-6 mb-4 text-center">
+            <h2 className="text-2xl font-bold mb-2">🍺 本日のギラ飲みチャットは終了しました 🍺</h2>
+            <p className="text-lg">
+              ご参加ありがとうございました！またのご参加をお待ちしています。
+            </p>
+            <p className="text-sm mt-2 opacity-90">
+              メッセージは閲覧できますが、新しい投稿はできません。
+            </p>
+          </div>
+        )}
+
         <div className="bg-white rounded-xl shadow-lg overflow-hidden">
           {/* モバイル用: 店舗リスト切り替えボタン */}
           <div className="md:hidden bg-gray-100 p-3 border-b-2 border-gray-200">
@@ -232,6 +320,8 @@ function PostMatchChatPageContent() {
                 messages={messages}
                 currentUserId={userId || "current_user"}
                 onSendMessage={handleSendMessage}
+                onUpdateMessage={(messageId, newText) => updateMessage(messageId, { text: newText })}
+                onDeleteMessage={deleteMessage}
                 isClosed={isClosed}
                 attachedRestaurant={attachedRestaurant}
                 onRemoveAttachedRestaurant={handleRemoveAttachedRestaurant}

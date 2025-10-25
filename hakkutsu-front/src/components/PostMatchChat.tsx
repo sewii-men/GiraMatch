@@ -8,6 +8,8 @@ interface PostMatchChatProps {
   messages: ChatMessage[];
   currentUserId: string;
   onSendMessage: (text: string, restaurant?: Restaurant) => void;
+  onUpdateMessage?: (messageId: string, newText: string) => void;
+  onDeleteMessage?: (messageId: string) => void;
   isClosed: boolean;
   attachedRestaurant?: Restaurant | null;
   onRemoveAttachedRestaurant?: () => void;
@@ -17,11 +19,16 @@ export default function PostMatchChat({
   messages,
   currentUserId,
   onSendMessage,
+  onUpdateMessage,
+  onDeleteMessage,
   isClosed,
   attachedRestaurant = null,
   onRemoveAttachedRestaurant,
 }: PostMatchChatProps) {
   const [messageText, setMessageText] = useState("");
+  const [editingMessageId, setEditingMessageId] = useState<string | null>(null);
+  const [editingText, setEditingText] = useState("");
+  const [deletingMessageId, setDeletingMessageId] = useState<string | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   // 新しいメッセージが追加されたら自動スクロール
@@ -43,6 +50,37 @@ export default function PostMatchChat({
     setMessageText(template);
   };
 
+  const handleStartEdit = (message: ChatMessage) => {
+    setEditingMessageId(message.id);
+    setEditingText(message.text);
+  };
+
+  const handleSaveEdit = () => {
+    if (!editingMessageId || !editingText.trim()) return;
+    if (onUpdateMessage) {
+      onUpdateMessage(editingMessageId, editingText);
+    }
+    setEditingMessageId(null);
+    setEditingText("");
+  };
+
+  const handleCancelEdit = () => {
+    setEditingMessageId(null);
+    setEditingText("");
+  };
+
+  const handleDeleteConfirm = (messageId: string) => {
+    setDeletingMessageId(messageId);
+  };
+
+  const handleDeleteMessage = () => {
+    if (!deletingMessageId) return;
+    if (onDeleteMessage) {
+      onDeleteMessage(deletingMessageId);
+    }
+    setDeletingMessageId(null);
+  };
+
   const formatTime = (timestamp: string) => {
     const date = new Date(timestamp);
     return date.toLocaleTimeString("ja-JP", { hour: "2-digit", minute: "2-digit" });
@@ -54,6 +92,22 @@ export default function PostMatchChat({
       <div className="flex-1 overflow-y-auto p-4 space-y-4">
         {messages.map((message) => {
           const isCurrentUser = message.userId === currentUserId;
+          const isEditing = editingMessageId === message.id;
+          const isDeleted = message.isDeleted;
+
+          // 削除済みメッセージの表示
+          if (isDeleted) {
+            return (
+              <div
+                key={message.id}
+                className={`flex ${isCurrentUser ? "justify-end" : "justify-start"}`}
+              >
+                <div className="max-w-[70%] bg-gray-200 rounded-lg p-3 opacity-50">
+                  <p className="text-gray-500 italic text-sm">このメッセージは削除されました</p>
+                </div>
+              </div>
+            );
+          }
 
           return (
             <div
@@ -76,7 +130,40 @@ export default function PostMatchChat({
                 )}
 
                 {/* メッセージ本文 */}
-                <p className="text-black mb-1">{message.text}</p>
+                {isEditing ? (
+                  <div className="mb-2">
+                    <input
+                      type="text"
+                      value={editingText}
+                      onChange={(e) => setEditingText(e.target.value)}
+                      onKeyPress={(e) => {
+                        if (e.key === "Enter") {
+                          handleSaveEdit();
+                        } else if (e.key === "Escape") {
+                          handleCancelEdit();
+                        }
+                      }}
+                      className="w-full px-2 py-1 border-2 border-yellow-400 rounded text-black"
+                      autoFocus
+                    />
+                    <div className="flex gap-2 mt-2">
+                      <button
+                        onClick={handleSaveEdit}
+                        className="px-3 py-1 bg-green-600 text-white rounded text-xs font-bold hover:bg-green-700"
+                      >
+                        保存
+                      </button>
+                      <button
+                        onClick={handleCancelEdit}
+                        className="px-3 py-1 bg-gray-400 text-white rounded text-xs font-bold hover:bg-gray-500"
+                      >
+                        キャンセル
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <p className="text-black mb-1">{message.text}</p>
+                )}
 
                 {/* 店舗情報（付与されている場合） */}
                 {message.restaurant && (
@@ -108,16 +195,60 @@ export default function PostMatchChat({
                   </div>
                 )}
 
-                {/* タイムスタンプ */}
-                <p className="text-xs text-gray-500 mt-1 text-right">
-                  {formatTime(message.timestamp)}
-                </p>
+                {/* タイムスタンプと編集・削除ボタン */}
+                <div className="flex items-center justify-between mt-1">
+                  <p className="text-xs text-gray-500">
+                    {formatTime(message.timestamp)}
+                  </p>
+                  {isCurrentUser && !isEditing && !isClosed && (
+                    <div className="flex gap-2">
+                      <button
+                        onClick={() => handleStartEdit(message)}
+                        className="text-xs text-blue-600 hover:text-blue-800 font-bold"
+                      >
+                        編集
+                      </button>
+                      <button
+                        onClick={() => handleDeleteConfirm(message.id)}
+                        className="text-xs text-red-600 hover:text-red-800 font-bold"
+                      >
+                        削除
+                      </button>
+                    </div>
+                  )}
+                </div>
               </div>
             </div>
           );
         })}
         <div ref={messagesEndRef} />
       </div>
+
+      {/* 削除確認ダイアログ */}
+      {deletingMessageId && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-xl p-6 max-w-sm w-full">
+            <h3 className="text-lg font-bold text-black mb-4">メッセージを削除しますか？</h3>
+            <p className="text-sm text-gray-600 mb-6">
+              この操作は取り消せません。削除されたメッセージは復元できません。
+            </p>
+            <div className="flex gap-3">
+              <button
+                onClick={() => setDeletingMessageId(null)}
+                className="flex-1 px-4 py-2 bg-gray-300 text-black rounded-lg font-bold hover:bg-gray-400 transition"
+              >
+                キャンセル
+              </button>
+              <button
+                onClick={handleDeleteMessage}
+                className="flex-1 px-4 py-2 bg-red-600 text-white rounded-lg font-bold hover:bg-red-700 transition"
+              >
+                削除
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* 入力エリア */}
       <div className="border-t-2 border-gray-200 p-4 bg-white">

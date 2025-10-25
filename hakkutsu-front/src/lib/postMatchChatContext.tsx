@@ -24,6 +24,11 @@ interface PostMatchChatContextType {
   // 店舗共有状況
   restaurantShares: { restaurantId: string; count: number }[];
 
+  // 未読管理
+  unreadCount: number;
+  lastReadAt: string | null;
+  markAsRead: () => void;
+
   // 初期化
   initializeChat: (chat: PostMatchChat) => void;
   clearChat: () => void;
@@ -43,6 +48,7 @@ export function PostMatchChatProvider({ children }: PostMatchChatProviderProps) 
   const [participantCount, setParticipantCount] = useState<number>(0);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [attachedRestaurant, setAttachedRestaurant] = useState<Restaurant | null>(null);
+  const [lastReadAt, setLastReadAt] = useState<string | null>(null);
 
   // ローカルストレージキーの生成
   const getStorageKey = useCallback((chatId: string) => {
@@ -60,6 +66,7 @@ export function PostMatchChatProvider({ children }: PostMatchChatProviderProps) 
       try {
         const data = JSON.parse(stored);
         setMessages(data.messages || []);
+        setLastReadAt(data.lastReadAt || null);
       } catch (error) {
         console.error("Failed to restore chat from localStorage:", error);
       }
@@ -75,6 +82,7 @@ export function PostMatchChatProvider({ children }: PostMatchChatProviderProps) 
       chatId,
       matchId,
       messages,
+      lastReadAt,
       savedAt: new Date().toISOString(),
     };
 
@@ -83,7 +91,7 @@ export function PostMatchChatProvider({ children }: PostMatchChatProviderProps) 
     } catch (error) {
       console.error("Failed to save chat to localStorage:", error);
     }
-  }, [chatId, matchId, messages, getStorageKey]);
+  }, [chatId, matchId, messages, lastReadAt, getStorageKey]);
 
   // メッセージ追加
   const addMessage = useCallback((message: ChatMessage) => {
@@ -125,6 +133,23 @@ export function PostMatchChatProvider({ children }: PostMatchChatProviderProps) 
       .sort((a, b) => b.count - a.count); // 共有数の多い順
   }, [messages]);
 
+  // 未読カウントの計算
+  const unreadCount = useMemo(() => {
+    if (!lastReadAt) {
+      return messages.filter((msg) => !msg.isDeleted).length;
+    }
+
+    return messages.filter(
+      (msg) => !msg.isDeleted && new Date(msg.timestamp) > new Date(lastReadAt)
+    ).length;
+  }, [messages, lastReadAt]);
+
+  // 既読にする
+  const markAsRead = useCallback(() => {
+    const now = new Date().toISOString();
+    setLastReadAt(now);
+  }, []);
+
   // チャット初期化
   const initializeChat = useCallback((chat: PostMatchChat) => {
     setChatId(chat.id);
@@ -149,6 +174,7 @@ export function PostMatchChatProvider({ children }: PostMatchChatProviderProps) 
     setParticipantCount(0);
     setMessages([]);
     setAttachedRestaurant(null);
+    setLastReadAt(null);
   }, [chatId, getStorageKey]);
 
   const value = useMemo(
@@ -165,6 +191,9 @@ export function PostMatchChatProvider({ children }: PostMatchChatProviderProps) 
       attachedRestaurant,
       setAttachedRestaurant,
       restaurantShares,
+      unreadCount,
+      lastReadAt,
+      markAsRead,
       initializeChat,
       clearChat,
     }),
@@ -180,6 +209,9 @@ export function PostMatchChatProvider({ children }: PostMatchChatProviderProps) 
       deleteMessage,
       attachedRestaurant,
       restaurantShares,
+      unreadCount,
+      lastReadAt,
+      markAsRead,
       initializeChat,
       clearChat,
     ]
