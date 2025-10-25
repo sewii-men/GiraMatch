@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import AuthGuard from "@/components/AuthGuard";
 import { useAuth } from "@/lib/auth";
 
@@ -22,7 +22,7 @@ export default function CheckInPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const fetchList = async () => {
+  const fetchList = useCallback(async () => {
     try {
       const base = process.env.NEXT_PUBLIC_API_URL;
       const res = await fetch(`${base}/check-ins?userId=${encodeURIComponent(userId || "")}`, {
@@ -35,11 +35,11 @@ export default function CheckInPage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [token, userId]);
 
   useEffect(() => {
     fetchList();
-  }, [token, userId]);
+  }, [fetchList]);
 
   const handleCheckIn = async (matchId: string) => {
     const base = process.env.NEXT_PUBLIC_API_URL;
@@ -119,7 +119,7 @@ export default function CheckInPage() {
                           {match.partner.name}
                         </p>
                         <div className="flex items-center gap-2 mt-1">
-                          {match.partner.checkedIn ? (
+                          {match.partnerCheckedIn ? (
                             <span className="text-green-600 text-sm font-bold flex items-center gap-1">
                               <span>✓</span> 来場済み
                             </span>

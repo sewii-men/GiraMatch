@@ -1,6 +1,6 @@
 "use client";
 
-import React, { createContext, useContext, useEffect, useMemo, useState } from "react";
+import React, { createContext, useContext, useEffect, useMemo, useState, useCallback } from "react";
 
 type AuthState = {
   token: string | null;
@@ -25,7 +25,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setUserId(u);
   }, []);
 
-  const setAuth = (next: AuthState) => {
+  const setAuth = useCallback((next: AuthState) => {
     setToken(next.token);
     setUserId(next.userId);
     if (typeof window !== "undefined") {
@@ -34,9 +34,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (next.userId) localStorage.setItem("userId", next.userId);
       else localStorage.removeItem("userId");
     }
-  };
+  }, []);
 
-  const logout = () => setAuth({ token: null, userId: null });
+  const logout = useCallback(() => setAuth({ token: null, userId: null }), [setAuth]);
 
   const value = useMemo(() => ({ token, userId, setAuth, logout }), [token, userId, setAuth, logout]);
 

@@ -121,17 +121,17 @@ export default function ChatDetailPage() {
           {messages.map((message) => (
             <div
               key={message.messageId}
-              className={`flex ${message.senderId === "demo" ? "justify-end" : "justify-start"}`}
+              className={`flex ${message.senderId === (userId || "") ? "justify-end" : "justify-start"}`}
             >
               <div
                 className={`max-w-md px-4 py-3 rounded-lg ${
-                  message.senderId === "demo"
+                  message.senderId === (userId || "")
                     ? "bg-yellow-400 text-black"
                     : "bg-white text-black border-2 border-gray-200"
                 }`}
               >
                 <p className="mb-1">{message.text}</p>
-                <p className={`text-xs ${message.senderId === "demo" ? "text-gray-700" : "text-gray-500"}`}>
+                <p className={`text-xs ${message.senderId === (userId || "") ? "text-gray-700" : "text-gray-500"}`}>
                   {new Date(message.createdAt).toLocaleTimeString("ja-JP", { hour: "2-digit", minute: "2-digit" })}
                 </p>
               </div>
