@@ -20,6 +20,11 @@ GET /matches/match_20250115_001/restaurants
 Authorization: Bearer {token}
 ```
 
+**パスパラメータ**:
+| パラメータ | 型 | 説明 |
+|-----------|-----|------|
+| matchId | string | 試合ID（例: `match_20250115_001`） |
+
 **クエリパラメータ**:
 | パラメータ | 型 | 必須 | 説明 |
 |-----------|-----|------|------|
@@ -51,6 +56,21 @@ Authorization: Bearer {token}
 }
 ```
 
+**レスポンスフィールド**:
+| フィールド | 型 | 説明 |
+|-----------|-----|------|
+| restaurants[].restaurantId | string | 店舗ID |
+| restaurants[].name | string | 店舗名 |
+| restaurants[].address | string | 住所 |
+| restaurants[].category | string | 店舗カテゴリ（`izakaya`, `cafe`, `ramen`, `other`） |
+| restaurants[].imageUrl | string | 店舗画像URL |
+| restaurants[].googleMapUrl | string | Google Map リンク |
+| restaurants[].latitude / longitude | number | 位置情報 |
+| restaurants[].distance | number | 会場からの距離（メートル） |
+| venue | object | 試合会場の情報 |
+
+**ステータスコード**: `200 OK`
+
 **エラーレスポンス**:
 ```json
 {
@@ -71,6 +91,11 @@ Authorization: Bearer {token}
 GET /matches/match_20250115_001/post-match-chat
 Authorization: Bearer {token}
 ```
+
+**パスパラメータ**:
+| パラメータ | 型 | 説明 |
+|-----------|-----|------|
+| matchId | string | 試合ID |
 
 **レスポンス**:
 ```json
@@ -122,6 +147,21 @@ Authorization: Bearer {token}
 }
 ```
 
+**レスポンスフィールド**:
+| フィールド | 型 | 説明 |
+|-----------|-----|------|
+| chat.chatId | string | チャットID |
+| chat.matchId | string | 対象の試合ID |
+| chat.opponent | string | 対戦相手表記 |
+| chat.startTime / endTime | string (ISO8601) | チャットの有効期間 |
+| chat.isClosed | boolean | チャットが閉鎖済みかどうか |
+| chat.participantCount | number | 参加者数 |
+| messages[] | array | チャットメッセージ一覧（最新50件まで推奨） |
+| messages[].restaurant | object/null | 店舗付与情報 |
+| userParticipation | object | ログインユーザーの参加状況（joinedAt / lastReadAt を含む） |
+
+**ステータスコード**: `200 OK`
+
 **エラーレスポンス**:
 ```json
 {
@@ -146,6 +186,11 @@ Content-Type: application/json
   "restaurantId": "rest_001"
 }
 ```
+
+**パスパラメータ**:
+| パラメータ | 型 | 説明 |
+|-----------|-----|------|
+| chatId | string | 投稿先チャットのID |
 
 **リクエストボディ**:
 | フィールド | 型 | 必須 | 説明 |
@@ -174,6 +219,8 @@ Content-Type: application/json
   }
 }
 ```
+
+**ステータスコード**: `201 Created`
 
 **エラーレスポンス**:
 ```json
@@ -255,6 +302,11 @@ GET /post-match-chats/pmc_20250115_001/restaurant-shares
 Authorization: Bearer {token}
 ```
 
+**パスパラメータ**:
+| パラメータ | 型 | 説明 |
+|-----------|-----|------|
+| chatId | string | 対象チャットID |
+
 **レスポンス**:
 ```json
 {
@@ -288,7 +340,17 @@ Authorization: Bearer {token}
 }
 ```
 
----
+**レスポンスフィールド**:
+| フィールド | 型 | 説明 |
+|-----------|-----|------|
+| shares[].restaurant | object | 店舗の基本情報（Map描画用） |
+| shares[].shareCount | number | メッセージに付与された回数 |
+| shares[].lastSharedAt | string | 最終共有日時 |
+| totalShares | number | 共有の合計件数 |
+
+**ステータスコード**: `200 OK`
+
+--- 
 
 ### 4. チャット管理（内部API/スケジューラー用）
 
@@ -306,6 +368,16 @@ Content-Type: application/json
   "endTime": "2025-01-15T23:59:59Z"
 }
 ```
+
+**パスパラメータ**:
+| パラメータ | 型 | 説明 |
+|-----------|-----|------|
+| matchId | string | 試合ID |
+
+**リクエストボディ**:
+| フィールド | 型 | 必須 | 説明 |
+|-----------|-----|------|------|
+| endTime | string | No | 明示的な終了予定時刻（未指定時は23:59扱い） |
 
 **レスポンス**:
 ```json
@@ -327,6 +399,8 @@ Content-Type: application/json
 }
 ```
 
+**ステータスコード**: `201 Created`
+
 ---
 
 #### `POST /post-match-chats/{chatId}/close`
@@ -339,6 +413,11 @@ POST /post-match-chats/pmc_20250115_001/close
 Authorization: Bearer {system-token}
 ```
 
+**パスパラメータ**:
+| パラメータ | 型 | 説明 |
+|-----------|-----|------|
+| chatId | string | 閉鎖対象のチャットID |
+
 **レスポンス**:
 ```json
 {
@@ -350,6 +429,8 @@ Authorization: Bearer {system-token}
   }
 }
 ```
+
+**ステータスコード**: `200 OK`
 
 ---
 

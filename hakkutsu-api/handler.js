@@ -6,6 +6,8 @@ const {
   PutCommand,
   ScanCommand,
   QueryCommand,
+  UpdateCommand,
+  BatchGetCommand,
 } = require("@aws-sdk/lib-dynamodb");
 
 const express = require("express");
@@ -42,6 +44,12 @@ const REVIEWS_TABLE = process.env.REVIEWS_TABLE;
 const REPORTS_TABLE = process.env.REPORTS_TABLE;
 const RECRUITMENTS_TABLE = process.env.RECRUITMENTS_TABLE;
 const REQUESTS_TABLE = process.env.REQUESTS_TABLE;
+const RESTAURANTS_TABLE = process.env.RESTAURANTS_TABLE;
+const POST_MATCH_CHATS_TABLE = process.env.POST_MATCH_CHATS_TABLE;
+const POST_MATCH_CHAT_MESSAGES_TABLE = process.env.POST_MATCH_CHAT_MESSAGES_TABLE;
+const RESTAURANT_SHARES_TABLE = process.env.RESTAURANT_SHARES_TABLE;
+const CHAT_PARTICIPANTS_TABLE = process.env.CHAT_PARTICIPANTS_TABLE;
+const SYSTEM_API_TOKEN = process.env.SYSTEM_API_TOKEN;
 
 // Local DynamoDB (via docker-compose) support
 const isLocal = !!process.env.DYNAMODB_LOCAL_URL;
@@ -121,6 +129,114 @@ function requireAdmin(req, res, next) {
   } catch (e) {
     return res.status(401).json({ error: "Unauthorized" });
   }
+}
+
+function requireSystemAuth(req, res, next) {
+  if (!SYSTEM_API_TOKEN) {
+    return res.status(500).json({ error: "SYSTEM_API_TOKEN is not configured" });
+  }
+
+  const h = req.headers["authorization"] || req.headers["Authorization"];
+  if (!h || typeof h !== "string" || !h.startsWith("Bearer ")) {
+    return res.status(401).json({ error: "Unauthorized" });
+  }
+
+  const token = h.slice("Bearer ".length).trim();
+  if (token !== SYSTEM_API_TOKEN) {
+    return res.status(401).json({ error: "Unauthorized" });
+  }
+
+  return next();
+}
+
+function mapRestaurantItem(item) {
+  if (!item) return null;
+  return {
+    restaurantId: item.restaurant_id,
+    name: item.name,
+    address: item.address,
+    category: item.category,
+    imageUrl: item.image_url,
+    googleMapUrl: item.google_map_url,
+    latitude: item.latitude,
+    longitude: item.longitude,
+    distance: item.distance,
+  };
+}
+
+function mapChatResponse(chatItem, matchItem) {
+  if (!chatItem) return null;
+  return {
+    chatId: chatItem.chat_id,
+    matchId: chatItem.match_id,
+    opponent: chatItem.opponent || matchItem?.opponent || "",
+    date: matchItem?.date || chatItem.date || "",
+    startTime: chatItem.start_time,
+    endTime: chatItem.end_time,
+    isClosed: !!chatItem.is_closed,
+    participantCount: chatItem.participant_count || 0,
+  };
+}
+
+function mapMessageResponse(item, restaurant, user) {
+  if (!item) return null;
+  return {
+    messageId: item.message_id,
+    userId: item.user_id,
+    nickname: user?.nickname || user?.name || item.user_id,
+    icon: user?.icon || "👤",
+    text: item.text,
+    restaurant: restaurant || null,
+    createdAt: item.created_at,
+    updatedAt: item.updated_at || null,
+    isDeleted: !!item.is_deleted,
+  };
+}
+
+async function batchGetRestaurantsByIds(ids = []) {
+  const unique = Array.from(new Set(ids.filter(Boolean)));
+  if (!unique.length || !RESTAURANTS_TABLE) return {};
+
+  const result = await docClient.send(
+    new BatchGetCommand({
+      RequestItems: {
+        [RESTAURANTS_TABLE]: {
+          Keys: unique.map((id) => ({ restaurant_id: id })),
+        },
+      },
+    })
+  );
+
+  const map = {};
+  (result.Responses?.[RESTAURANTS_TABLE] || []).forEach((item) => {
+    map[item.restaurant_id] = mapRestaurantItem(item);
+  });
+  return map;
+}
+
+async function batchGetUsersByIds(ids = []) {
+  const unique = Array.from(new Set(ids.filter(Boolean)));
+  if (!unique.length) return {};
+
+  const result = await docClient.send(
+    new BatchGetCommand({
+      RequestItems: {
+        [USERS_TABLE]: {
+          Keys: unique.map((id) => ({ userId: id })),
+        },
+      },
+    })
+  );
+
+  const map = {};
+  (result.Responses?.[USERS_TABLE] || []).forEach((item) => {
+    map[item.userId] = item;
+  });
+  return map;
+}
+
+function getCurrentUserId(req) {
+  return req.user?.userId || req.user?.sub;
 }
 
 // 確認用エンドポイント
@@ -806,6 +922,493 @@ app.post("/chats/:chatId/messages", requireAuth, async (req, res) => {
   } catch (error) {
     console.error(error);
     res.status(500).json({ error: "Could not send message" });
+  }
+});
+
+// ========== ギラ飲み: 試合後チャット関連 ==========
+
+app.get("/matches/:matchId/restaurants", requireAuth, async (req, res) => {
+  if (!RESTAURANTS_TABLE) {
+    return res.status(500).json({ error: "Restaurants table is not configured" });
+  }
+
+  const { matchId } = req.params;
+  const category = req.query.category;
+  const parsedLimit = parseInt(req.query.limit, 10);
+
+  try {
+    const { Item: match } = await docClient.send(
+      new GetCommand({ TableName: MATCHES_TABLE, Key: { matchId } })
+    );
+    if (!match) return res.status(404).json({ error: "Match not found" });
+    if (!match.venue) return res.status(400).json({ error: "Match venue is not set" });
+
+    const queryParams = {
+      TableName: RESTAURANTS_TABLE,
+      IndexName: "VenueDistanceIndex",
+      KeyConditionExpression: "venue = :venue",
+      ExpressionAttributeValues: {
+        ":venue": match.venue,
+      },
+      ScanIndexForward: true,
+    };
+
+    if (!Number.isNaN(parsedLimit) && parsedLimit > 0) {
+      queryParams.Limit = parsedLimit;
+    }
+
+    if (category) {
+      queryParams.FilterExpression = "category = :category";
+      queryParams.ExpressionAttributeValues[":category"] = category;
+    }
+
+    const data = await docClient.send(new QueryCommand(queryParams));
+    res.json({
+      restaurants: (data.Items || []).map(mapRestaurantItem),
+      venue: {
+        venueId: match.venueId || match.venue,
+        name: match.venue,
+        latitude: match.latitude,
+        longitude: match.longitude,
+      },
+    });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: "Could not fetch restaurants" });
+  }
+});
+
+app.get("/matches/:matchId/post-match-chat", requireAuth, async (req, res) => {
+  if (!POST_MATCH_CHATS_TABLE || !CHAT_PARTICIPANTS_TABLE) {
+    return res.status(500).json({ error: "Post-match chat tables are not configured" });
+  }
+
+  const { matchId } = req.params;
+  const userId = getCurrentUserId(req);
+  if (!userId) return res.status(401).json({ error: "Unauthorized" });
+
+  try {
+    const chatResp = await docClient.send(
+      new QueryCommand({
+        TableName: POST_MATCH_CHATS_TABLE,
+        IndexName: "MatchIdIndex",
+        KeyConditionExpression: "match_id = :matchId",
+        ExpressionAttributeValues: { ":matchId": matchId },
+        Limit: 1,
+      })
+    );
+
+    const chatItem = chatResp.Items && chatResp.Items[0];
+    if (!chatItem) {
+      return res.status(404).json({ error: "Chat not found or not accessible" });
+    }
+
+    const chatId = chatItem.chat_id;
+
+    const participantResp = await docClient.send(
+      new GetCommand({
+        TableName: CHAT_PARTICIPANTS_TABLE,
+        Key: { chat_id: chatId, user_id: userId },
+      })
+    );
+
+    if (!participantResp.Item) {
+      return res.status(403).json({ error: "Chat not found or not accessible" });
+    }
+
+    const [messagesResp, matchResp] = await Promise.all([
+      docClient.send(
+        new QueryCommand({
+          TableName: POST_MATCH_CHAT_MESSAGES_TABLE,
+          IndexName: "ChatIdCreatedAtIndex",
+          KeyConditionExpression: "chat_id = :chatId",
+          ExpressionAttributeValues: { ":chatId": chatId },
+          ScanIndexForward: true,
+          Limit: 100,
+        })
+      ),
+      docClient.send(new GetCommand({ TableName: MATCHES_TABLE, Key: { matchId } })),
+    ]);
+
+    const messageItems = messagesResp.Items || [];
+    const [restaurantMap, userMap] = await Promise.all([
+      batchGetRestaurantsByIds(messageItems.map((item) => item.restaurant_id)),
+      batchGetUsersByIds(messageItems.map((item) => item.user_id)),
+    ]);
+
+    const messages = messageItems.map((item) =>
+      mapMessageResponse(item, item.restaurant_id ? restaurantMap[item.restaurant_id] : null, userMap[item.user_id])
+    );
+
+    res.json({
+      chat: mapChatResponse(chatItem, matchResp.Item),
+      messages,
+      userParticipation: {
+        isParticipant: true,
+        joinedAt: participantResp.Item.joined_at,
+        lastReadAt: participantResp.Item.last_read_at || null,
+      },
+    });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: "Could not fetch chat" });
+  }
+});
+
+app.post("/post-match-chats/:chatId/messages", requireAuth, async (req, res) => {
+  if (!POST_MATCH_CHAT_MESSAGES_TABLE || !CHAT_PARTICIPANTS_TABLE) {
+    return res.status(500).json({ error: "Post-match chat tables are not configured" });
+  }
+
+  const { chatId } = req.params;
+  const userId = getCurrentUserId(req);
+  if (!userId) return res.status(401).json({ error: "Unauthorized" });
+
+  const { text, restaurantId } = req.body || {};
+  if (!text || typeof text !== "string" || !text.trim()) {
+    return res.status(400).json({ error: "text is required" });
+  }
+  if (text.length > 500) {
+    return res.status(400).json({ error: "text must be 500 characters or less" });
+  }
+
+  try {
+    const chatResp = await docClient.send(
+      new GetCommand({ TableName: POST_MATCH_CHATS_TABLE, Key: { chat_id: chatId } })
+    );
+    if (!chatResp.Item) return res.status(404).json({ error: "Chat not found or not accessible" });
+    if (chatResp.Item.is_closed) return res.status(410).json({ error: "Chat is closed" });
+
+    const participantResp = await docClient.send(
+      new GetCommand({
+        TableName: CHAT_PARTICIPANTS_TABLE,
+        Key: { chat_id: chatId, user_id: userId },
+      })
+    );
+    if (!participantResp.Item) {
+      return res.status(403).json({ error: "Chat not found or not accessible" });
+    }
+
+    let restaurant = null;
+    if (restaurantId) {
+      const restaurantResp = await docClient.send(
+        new GetCommand({
+          TableName: RESTAURANTS_TABLE,
+          Key: { restaurant_id: restaurantId },
+        })
+      );
+      if (!restaurantResp.Item) {
+        return res.status(404).json({ error: "Restaurant not found" });
+      }
+      restaurant = mapRestaurantItem(restaurantResp.Item);
+    }
+
+    const now = new Date().toISOString();
+    const messageId = `msg_${Date.now()}`;
+    const messageItem = {
+      message_id: messageId,
+      chat_id: chatId,
+      user_id: userId,
+      text: text.trim(),
+      created_at: now,
+      updated_at: null,
+      is_deleted: false,
+      ...(restaurantId ? { restaurant_id: restaurantId } : {}),
+    };
+
+    await docClient.send(
+      new PutCommand({ TableName: POST_MATCH_CHAT_MESSAGES_TABLE, Item: messageItem })
+    );
+
+    if (restaurantId) {
+      const shareItem = {
+        share_id: `share_${Date.now()}`,
+        chat_id: chatId,
+        restaurant_id: restaurantId,
+        message_id: messageId,
+        user_id: userId,
+        created_at: now,
+      };
+      await docClient.send(new PutCommand({ TableName: RESTAURANT_SHARES_TABLE, Item: shareItem }));
+    }
+
+    await docClient.send(
+      new UpdateCommand({
+        TableName: CHAT_PARTICIPANTS_TABLE,
+        Key: { chat_id: chatId, user_id: userId },
+        UpdateExpression: "SET last_read_at = :now",
+        ExpressionAttributeValues: { ":now": now },
+      })
+    );
+
+    const userMap = await batchGetUsersByIds([userId]);
+
+    res.status(201).json({
+      message: mapMessageResponse(messageItem, restaurant, userMap[userId]),
+    });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: "Could not send message" });
+  }
+});
+
+app.get("/post-match-chats/:chatId/restaurant-shares", requireAuth, async (req, res) => {
+  if (!RESTAURANT_SHARES_TABLE || !CHAT_PARTICIPANTS_TABLE) {
+    return res.status(500).json({ error: "Restaurant share table is not configured" });
+  }
+
+  const { chatId } = req.params;
+  const userId = getCurrentUserId(req);
+  if (!userId) return res.status(401).json({ error: "Unauthorized" });
+
+  try {
+    const participantResp = await docClient.send(
+      new GetCommand({
+        TableName: CHAT_PARTICIPANTS_TABLE,
+        Key: { chat_id: chatId, user_id: userId },
+      })
+    );
+    if (!participantResp.Item) {
+      return res.status(403).json({ error: "Chat not found or not accessible" });
+    }
+
+    const sharesResp = await docClient.send(
+      new QueryCommand({
+        TableName: RESTAURANT_SHARES_TABLE,
+        IndexName: "ChatIdRestaurantIdIndex",
+        KeyConditionExpression: "chat_id = :chatId",
+        ExpressionAttributeValues: { ":chatId": chatId },
+      })
+    );
+
+    const shareItems = sharesResp.Items || [];
+    if (!shareItems.length) {
+      return res.json({ shares: [], totalShares: 0 });
+    }
+
+    const aggregated = shareItems.reduce((acc, item) => {
+      const existing = acc[item.restaurant_id] || {
+        restaurantId: item.restaurant_id,
+        count: 0,
+        lastSharedAt: item.created_at,
+      };
+      existing.count += 1;
+      if (item.created_at > existing.lastSharedAt) {
+        existing.lastSharedAt = item.created_at;
+      }
+      acc[item.restaurant_id] = existing;
+      return acc;
+    }, {});
+
+    const restaurantMap = await batchGetRestaurantsByIds(Object.keys(aggregated));
+
+    const shares = Object.values(aggregated).map((entry) => ({
+      restaurant: restaurantMap[entry.restaurantId] || { restaurantId: entry.restaurantId },
+      shareCount: entry.count,
+      lastSharedAt: entry.lastSharedAt,
+    }));
+
+    res.json({ shares, totalShares: shareItems.length });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: "Could not fetch restaurant shares" });
+  }
+});
+
+app.post("/matches/:matchId/post-match-chat/create", requireSystemAuth, async (req, res) => {
+  if (!POST_MATCH_CHATS_TABLE) {
+    return res.status(500).json({ error: "Post-match chat table is not configured" });
+  }
+
+  const { matchId } = req.params;
+  const { endTime } = req.body || {};
+  const nowIso = new Date().toISOString();
+
+  try {
+    const [matchResp, existingChatResp] = await Promise.all([
+      docClient.send(new GetCommand({ TableName: MATCHES_TABLE, Key: { matchId } })),
+      docClient.send(
+        new QueryCommand({
+          TableName: POST_MATCH_CHATS_TABLE,
+          IndexName: "MatchIdIndex",
+          KeyConditionExpression: "match_id = :matchId",
+          ExpressionAttributeValues: { ":matchId": matchId },
+          Limit: 1,
+        })
+      ),
+    ]);
+
+    if (!matchResp.Item) {
+      return res.status(404).json({ error: "Match not found" });
+    }
+
+    if (existingChatResp.Count > 0 && existingChatResp.Items?.length) {
+      return res.status(200).json({
+        alreadyExists: true,
+        chat: mapChatResponse(existingChatResp.Items[0], matchResp.Item),
+        participantCount: existingChatResp.Items[0].participant_count || 0,
+      });
+    }
+
+    const chatId = `pmc_${matchId}_${Date.now()}`;
+    let scheduledEndTime = endTime;
+    if (!scheduledEndTime) {
+      const base = matchResp.Item?.date ? new Date(matchResp.Item.date) : new Date();
+      base.setHours(23, 59, 59, 999);
+      scheduledEndTime = base.toISOString();
+    }
+
+    const checkinsResp = await docClient.send(
+      new QueryCommand({
+        TableName: CHECKINS_TABLE,
+        KeyConditionExpression: "matchId = :matchId",
+        ExpressionAttributeValues: { ":matchId": matchId },
+      })
+    );
+
+    const participantIds = (checkinsResp.Items || []).map((item) => item.userId).filter(Boolean);
+    const chatItem = {
+      chat_id: chatId,
+      match_id: matchId,
+      opponent: matchResp.Item.opponent,
+      venue: matchResp.Item.venue,
+      start_time: nowIso,
+      end_time: scheduledEndTime,
+      is_closed: false,
+      participant_count: participantIds.length,
+      created_at: nowIso,
+      updated_at: nowIso,
+    };
+
+    await docClient.send(new PutCommand({ TableName: POST_MATCH_CHATS_TABLE, Item: chatItem }));
+
+    for (const participantId of participantIds) {
+      await docClient.send(
+        new PutCommand({
+          TableName: CHAT_PARTICIPANTS_TABLE,
+          Item: {
+            chat_id: chatId,
+            user_id: participantId,
+            joined_at: nowIso,
+            last_read_at: null,
+          },
+        })
+      );
+    }
+
+    const userMap = await batchGetUsersByIds(participantIds);
+    const participants = participantIds.map((id) => ({
+      userId: id,
+      nickname: userMap[id]?.nickname || userMap[id]?.name || id,
+    }));
+
+    res.status(201).json({
+      chat: mapChatResponse(chatItem, matchResp.Item),
+      participants,
+      participantCount: participantIds.length,
+    });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: "Could not create post-match chat" });
+  }
+});
+
+app.post("/post-match-chats/:chatId/close", requireSystemAuth, async (req, res) => {
+  if (!POST_MATCH_CHATS_TABLE) {
+    return res.status(500).json({ error: "Post-match chat table is not configured" });
+  }
+
+  const { chatId } = req.params;
+
+  try {
+    const existing = await docClient.send(
+      new GetCommand({ TableName: POST_MATCH_CHATS_TABLE, Key: { chat_id: chatId } })
+    );
+    if (!existing.Item) {
+      return res.status(404).json({ error: "Chat not found" });
+    }
+
+    if (existing.Item.is_closed) {
+      return res.json({
+        success: true,
+        chat: {
+          chatId,
+          isClosed: true,
+          closedAt: existing.Item.closed_at || existing.Item.updated_at || existing.Item.end_time,
+        },
+      });
+    }
+
+    const closedAt = new Date().toISOString();
+    const updated = await docClient.send(
+      new UpdateCommand({
+        TableName: POST_MATCH_CHATS_TABLE,
+        Key: { chat_id: chatId },
+        UpdateExpression: "SET is_closed = :true, closed_at = :closedAt, updated_at = :closedAt",
+        ExpressionAttributeValues: {
+          ":true": true,
+          ":closedAt": closedAt,
+        },
+        ReturnValues: "ALL_NEW",
+      })
+    );
+
+    res.json({
+      success: true,
+      chat: {
+        chatId,
+        isClosed: true,
+        closedAt: updated.Attributes?.closed_at || closedAt,
+      },
+    });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: "Could not close chat" });
+  }
+});
+
+app.post("/post-match-chats/:chatId/notify", requireSystemAuth, async (req, res) => {
+  if (!CHAT_PARTICIPANTS_TABLE) {
+    return res.status(500).json({ error: "Chat participants table is not configured" });
+  }
+
+  const { chatId } = req.params;
+  const { type = "chat_opened", message = "ギラ飲みチャットが開設されました！" } = req.body || {};
+
+  try {
+    const participantsResp = await docClient.send(
+      new QueryCommand({
+        TableName: CHAT_PARTICIPANTS_TABLE,
+        KeyConditionExpression: "chat_id = :chatId",
+        ExpressionAttributeValues: { ":chatId": chatId },
+      })
+    );
+
+    const participants = participantsResp.Items || [];
+    if (!participants.length) {
+      return res.status(404).json({ error: "No participants found for this chat" });
+    }
+
+    const userIds = participants.map((item) => item.user_id);
+    const userMap = await batchGetUsersByIds(userIds);
+
+    const recipients = participants.map((item) => ({
+      userId: item.user_id,
+      nickname: userMap[item.user_id]?.nickname || userMap[item.user_id]?.name || item.user_id,
+      lastReadAt: item.last_read_at || null,
+      joinedAt: item.joined_at,
+    }));
+
+    res.json({
+      success: true,
+      type,
+      message,
+      notifiedUsers: recipients.length,
+      recipients,
+    });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: "Could not send notifications" });
   }
 });
 

@@ -1,6 +1,6 @@
 "use client";
 
-import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
+import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import { ChatMessage, PostMatchChat, Restaurant } from "@/types/postMatchChat";
 
 interface PostMatchChatContextType {
@@ -49,11 +49,16 @@ export function PostMatchChatProvider({ children }: PostMatchChatProviderProps) 
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [attachedRestaurant, setAttachedRestaurant] = useState<Restaurant | null>(null);
   const [lastReadAt, setLastReadAt] = useState<string | null>(null);
+  const chatIdRef = useRef<string | null>(null);
 
   // ローカルストレージキーの生成
   const getStorageKey = useCallback((chatId: string) => {
     return `post_match_chat_${chatId}`;
   }, []);
+
+  useEffect(() => {
+    chatIdRef.current = chatId;
+  }, [chatId]);
 
   // ローカルストレージからの復元
   useEffect(() => {
@@ -162,8 +167,9 @@ export function PostMatchChatProvider({ children }: PostMatchChatProviderProps) 
 
   // チャットクリア
   const clearChat = useCallback(() => {
-    if (chatId) {
-      const storageKey = getStorageKey(chatId);
+    const currentChatId = chatIdRef.current;
+    if (currentChatId) {
+      const storageKey = getStorageKey(currentChatId);
       localStorage.removeItem(storageKey);
     }
 
@@ -175,7 +181,7 @@ export function PostMatchChatProvider({ children }: PostMatchChatProviderProps) 
     setMessages([]);
     setAttachedRestaurant(null);
     setLastReadAt(null);
-  }, [chatId, getStorageKey]);
+  }, [getStorageKey]);
 
   const value = useMemo(
     () => ({

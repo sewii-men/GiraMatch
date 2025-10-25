@@ -8,12 +8,13 @@
 
 ## 必要なテーブル
 
-ギラ飲み機能では以下の4つのテーブルを使用します：
+ギラ飲み機能では以下の5つのテーブルを使用します：
 
 1. **Restaurants** - 店舗情報
 2. **PostMatchChats** - 試合後チャット
 3. **PostMatchChatMessages** - チャットメッセージ
 4. **RestaurantShares** - 店舗共有履歴
+5. **ChatParticipants** - チャット参加者の既読/参加状況
 
 詳細なスキーマ定義は [`DATABASE_DESIGN.md`](./DATABASE_DESIGN.md) を参照してください。
 
@@ -167,6 +168,21 @@ aws dynamodb create-table \
   --endpoint-url http://localhost:8000
 ```
 
+#### 2.5 ChatParticipants テーブル
+
+```bash
+aws dynamodb create-table \
+  --table-name ChatParticipants \
+  --attribute-definitions \
+    AttributeName=chat_id,AttributeType=S \
+    AttributeName=user_id,AttributeType=S \
+  --key-schema \
+    AttributeName=chat_id,KeyType=HASH \
+    AttributeName=user_id,KeyType=RANGE \
+  --billing-mode PAY_PER_REQUEST \
+  --endpoint-url http://localhost:8000
+```
+
 ---
 
 ### 3. テーブル作成の確認
@@ -183,6 +199,7 @@ aws dynamodb list-tables --endpoint-url http://localhost:8000
 - PostMatchChats
 - PostMatchChatMessages
 - RestaurantShares
+- ChatParticipants
 
 ---
 

@@ -7,8 +7,7 @@
  */
 
 const { DynamoDBClient } = require('@aws-sdk/client-dynamodb');
-const { DynamoDBDocumentClient, PutCommand, BatchWriteCommand } = require('@aws-sdk/lib-dynamodb');
-const { v4: uuidv4 } = require('uuid');
+const { DynamoDBDocumentClient, PutCommand } = require('@aws-sdk/lib-dynamodb');
 
 // DynamoDB クライアントの設定
 const client = new DynamoDBClient({
@@ -182,6 +181,39 @@ const getRestaurantShares = () => [
   },
 ];
 
+const chatParticipants = [
+  {
+    chat_id: 'pmc_test_001',
+    user_id: 'user_001',
+    joined_at: new Date(Date.now() - 4000000).toISOString(),
+    last_read_at: new Date(Date.now() - 3500000).toISOString(),
+  },
+  {
+    chat_id: 'pmc_test_001',
+    user_id: 'user_002',
+    joined_at: new Date(Date.now() - 3800000).toISOString(),
+    last_read_at: new Date(Date.now() - 3300000).toISOString(),
+  },
+  {
+    chat_id: 'pmc_test_001',
+    user_id: 'user_003',
+    joined_at: new Date(Date.now() - 3600000).toISOString(),
+    last_read_at: new Date(Date.now() - 2800000).toISOString(),
+  },
+  {
+    chat_id: 'pmc_test_001',
+    user_id: 'user_004',
+    joined_at: new Date(Date.now() - 3200000).toISOString(),
+    last_read_at: new Date(Date.now() - 2000000).toISOString(),
+  },
+  {
+    chat_id: 'pmc_test_001',
+    user_id: 'demo',
+    joined_at: new Date(Date.now() - 3400000).toISOString(),
+    last_read_at: new Date(Date.now() - 2100000).toISOString(),
+  },
+];
+
 async function seedData() {
   try {
     console.log('🌱 ギラ飲みデータの投入を開始します...\n');
@@ -235,12 +267,25 @@ async function seedData() {
       console.log(`  ✅ ${restaurant.name} の共有履歴を追加しました`);
     }
 
+    // 5. チャット参加者の投入
+    console.log('\n👥 チャット参加者を投入中...');
+    for (const participant of chatParticipants) {
+      await docClient.send(
+        new PutCommand({
+          TableName: 'ChatParticipants',
+          Item: participant,
+        })
+      );
+      console.log(`  ✅ 参加者を追加しました: ${participant.user_id}`);
+    }
+
     console.log('\n✨ すべてのデータの投入が完了しました！\n');
     console.log('📊 投入されたデータ:');
     console.log(`  - 店舗: ${restaurants.length}件`);
     console.log(`  - チャット: 1件`);
     console.log(`  - メッセージ: ${messages.length}件`);
     console.log(`  - 店舗共有履歴: ${shares.length}件`);
+    console.log(`  - チャット参加者: ${chatParticipants.length}件`);
     console.log('\n🎉 テスト画面で確認してください！');
     console.log('   URL: http://localhost:3000/post-match-chat/test_match_001\n');
   } catch (error) {

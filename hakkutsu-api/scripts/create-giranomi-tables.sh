@@ -147,11 +147,27 @@ aws dynamodb create-table \
 
 echo "  ✅ RestaurantShares テーブルを作成しました"
 
+# 5. ChatParticipants テーブル
+echo "👥 ChatParticipants テーブルを作成中..."
+aws dynamodb create-table \
+  --table-name ChatParticipants \
+  --attribute-definitions \
+    AttributeName=chat_id,AttributeType=S \
+    AttributeName=user_id,AttributeType=S \
+  --key-schema \
+    AttributeName=chat_id,KeyType=HASH \
+    AttributeName=user_id,KeyType=RANGE \
+  --billing-mode PAY_PER_REQUEST \
+  --endpoint-url $ENDPOINT \
+  > /dev/null 2>&1
+
+echo "  ✅ ChatParticipants テーブルを作成しました"
+
 echo ""
 echo "✨ すべてのテーブルの作成が完了しました！"
 echo ""
 echo "📋 作成されたテーブル:"
-aws dynamodb list-tables --endpoint-url $ENDPOINT | grep -E "(Restaurants|PostMatchChats|PostMatchChatMessages|RestaurantShares)"
+aws dynamodb list-tables --endpoint-url $ENDPOINT | grep -E "(Restaurants|PostMatchChats|PostMatchChatMessages|RestaurantShares|ChatParticipants)"
 
 echo ""
 echo "次のステップ:"

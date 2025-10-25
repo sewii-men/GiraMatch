@@ -8,6 +8,7 @@ type AuthState = {
 };
 
 type AuthContextType = AuthState & {
+  isReady: boolean;
   setAuth: (next: AuthState) => void;
   logout: () => void;
 };
@@ -17,12 +18,14 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [token, setToken] = useState<string | null>(null);
   const [userId, setUserId] = useState<string | null>(null);
+  const [isReady, setIsReady] = useState(false);
 
   useEffect(() => {
     const t = typeof window !== "undefined" ? localStorage.getItem("token") : null;
     const u = typeof window !== "undefined" ? localStorage.getItem("userId") : null;
     setToken(t);
     setUserId(u);
+    setIsReady(true);
   }, []);
 
   const setAuth = useCallback((next: AuthState) => {
@@ -34,11 +37,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (next.userId) localStorage.setItem("userId", next.userId);
       else localStorage.removeItem("userId");
     }
+    setIsReady(true);
   }, []);
 
   const logout = useCallback(() => setAuth({ token: null, userId: null }), [setAuth]);
 
-  const value = useMemo(() => ({ token, userId, setAuth, logout }), [token, userId, setAuth, logout]);
+  const value = useMemo(
+    () => ({ token, userId, isReady, setAuth, logout }),
+    [token, userId, isReady, setAuth, logout]
+  );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }

@@ -15,6 +15,11 @@ stages:
       reportsTableName: "reports-table-${sls:stage}"
       recruitmentsTableName: "recruitments-table-${sls:stage}"
       requestsTableName: "requests-table-${sls:stage}"
+      restaurantsTableName: "giranomi-restaurants-${sls:stage}"
+      postMatchChatsTableName: "giranomi-post-match-chats-${sls:stage}"
+      postMatchChatMessagesTableName: "giranomi-post-match-chat-messages-${sls:stage}"
+      restaurantSharesTableName: "giranomi-restaurant-shares-${sls:stage}"
+      chatParticipantsTableName: "giranomi-chat-participants-${sls:stage}"
       allowedOrigins:
         - 'http://localhost:3000'
         - 'https://hakkutsu-git-develop-tai09to06y-3264s-projects.vercel.app'
@@ -30,6 +35,11 @@ stages:
       reportsTableName: "reports-table-${sls:stage}"
       recruitmentsTableName: "recruitments-table-${sls:stage}"
       requestsTableName: "requests-table-${sls:stage}"
+      restaurantsTableName: "giranomi-restaurants-${sls:stage}"
+      postMatchChatsTableName: "giranomi-post-match-chats-${sls:stage}"
+      postMatchChatMessagesTableName: "giranomi-post-match-chat-messages-${sls:stage}"
+      restaurantSharesTableName: "giranomi-restaurant-shares-${sls:stage}"
+      chatParticipantsTableName: "giranomi-chat-participants-${sls:stage}"
       allowedOrigins:
         - 'https://hakkutsu-app.vercel.app'
       allowedOriginsCsv: 'https://hakkutsu-app.vercel.app'
@@ -70,6 +80,11 @@ provider:
             - Fn::GetAtt: [ReportsTable, Arn]
             - Fn::GetAtt: [RecruitmentsTable, Arn]
             - Fn::GetAtt: [RequestsTable, Arn]
+            - Fn::GetAtt: [RestaurantsTable, Arn]
+            - Fn::GetAtt: [PostMatchChatsTable, Arn]
+            - Fn::GetAtt: [PostMatchChatMessagesTable, Arn]
+            - Fn::GetAtt: [RestaurantSharesTable, Arn]
+            - Fn::GetAtt: [ChatParticipantsTable, Arn]
   environment:
     USERS_TABLE: ${param:tableName}
     MATCHES_TABLE: ${param:matchesTableName}
@@ -80,6 +95,12 @@ provider:
     REPORTS_TABLE: ${param:reportsTableName}
     RECRUITMENTS_TABLE: ${param:recruitmentsTableName}
     REQUESTS_TABLE: ${param:requestsTableName}
+    RESTAURANTS_TABLE: ${param:restaurantsTableName}
+    POST_MATCH_CHATS_TABLE: ${param:postMatchChatsTableName}
+    POST_MATCH_CHAT_MESSAGES_TABLE: ${param:postMatchChatMessagesTableName}
+    RESTAURANT_SHARES_TABLE: ${param:restaurantSharesTableName}
+    CHAT_PARTICIPANTS_TABLE: ${param:chatParticipantsTableName}
+    SYSTEM_API_TOKEN: ${env:SYSTEM_API_TOKEN, 'local-system-token'}
     JWT_SECRET: ${env:JWT_SECRET, 'change-me-in-prod'}
     ALLOWED_ORIGINS: ${param:allowedOriginsCsv}
 
@@ -209,3 +230,140 @@ resources:
             KeyType: HASH
         BillingMode: PAY_PER_REQUEST
         TableName: ${param:requestsTableName}
+    RestaurantsTable:
+      Type: AWS::DynamoDB::Table
+      Properties:
+        AttributeDefinitions:
+          - AttributeName: restaurant_id
+            AttributeType: S
+          - AttributeName: venue
+            AttributeType: S
+          - AttributeName: distance
+            AttributeType: N
+          - AttributeName: name
+            AttributeType: S
+        KeySchema:
+          - AttributeName: restaurant_id
+            KeyType: HASH
+        GlobalSecondaryIndexes:
+          - IndexName: VenueDistanceIndex
+            KeySchema:
+              - AttributeName: venue
+                KeyType: HASH
+              - AttributeName: distance
+                KeyType: RANGE
+            Projection:
+              ProjectionType: ALL
+          - IndexName: VenueNameIndex
+            KeySchema:
+              - AttributeName: venue
+                KeyType: HASH
+              - AttributeName: name
+                KeyType: RANGE
+            Projection:
+              ProjectionType: ALL
+        BillingMode: PAY_PER_REQUEST
+        TableName: ${param:restaurantsTableName}
+    PostMatchChatsTable:
+      Type: AWS::DynamoDB::Table
+      Properties:
+        AttributeDefinitions:
+          - AttributeName: chat_id
+            AttributeType: S
+          - AttributeName: match_id
+            AttributeType: S
+        KeySchema:
+          - AttributeName: chat_id
+            KeyType: HASH
+        GlobalSecondaryIndexes:
+          - IndexName: MatchIdIndex
+            KeySchema:
+              - AttributeName: match_id
+                KeyType: HASH
+            Projection:
+              ProjectionType: ALL
+        BillingMode: PAY_PER_REQUEST
+        TableName: ${param:postMatchChatsTableName}
+    PostMatchChatMessagesTable:
+      Type: AWS::DynamoDB::Table
+      Properties:
+        AttributeDefinitions:
+          - AttributeName: message_id
+            AttributeType: S
+          - AttributeName: chat_id
+            AttributeType: S
+          - AttributeName: created_at
+            AttributeType: S
+          - AttributeName: user_id
+            AttributeType: S
+        KeySchema:
+          - AttributeName: message_id
+            KeyType: HASH
+        GlobalSecondaryIndexes:
+          - IndexName: ChatIdCreatedAtIndex
+            KeySchema:
+              - AttributeName: chat_id
+                KeyType: HASH
+              - AttributeName: created_at
+                KeyType: RANGE
+            Projection:
+              ProjectionType: ALL
+          - IndexName: UserIdCreatedAtIndex
+            KeySchema:
+              - AttributeName: user_id
+                KeyType: HASH
+              - AttributeName: created_at
+                KeyType: RANGE
+            Projection:
+              ProjectionType: ALL
+        BillingMode: PAY_PER_REQUEST
+        TableName: ${param:postMatchChatMessagesTableName}
+    RestaurantSharesTable:
+      Type: AWS::DynamoDB::Table
+      Properties:
+        AttributeDefinitions:
+          - AttributeName: share_id
+            AttributeType: S
+          - AttributeName: chat_id
+            AttributeType: S
+          - AttributeName: restaurant_id
+            AttributeType: S
+          - AttributeName: created_at
+            AttributeType: S
+        KeySchema:
+          - AttributeName: share_id
+            KeyType: HASH
+        GlobalSecondaryIndexes:
+          - IndexName: ChatIdRestaurantIdIndex
+            KeySchema:
+              - AttributeName: chat_id
+                KeyType: HASH
+              - AttributeName: restaurant_id
+                KeyType: RANGE
+            Projection:
+              ProjectionType: ALL
+          - IndexName: RestaurantIdCreatedAtIndex
+            KeySchema:
+              - AttributeName: restaurant_id
+                KeyType: HASH
+              - AttributeName: created_at
+                KeyType: RANGE
+            Projection:
+              ProjectionType: ALL
+        BillingMode: PAY_PER_REQUEST
+        TableName: ${param:restaurantSharesTableName}
+    ChatParticipantsTable:
+      Type: AWS::DynamoDB::Table
+      Properties:
+        AttributeDefinitions:
+          - AttributeName: chat_id
+            AttributeType: S
+          - AttributeName: user_id
+            AttributeType: S
+        KeySchema:
+          - AttributeName: chat_id
+            KeyType: HASH
+          - AttributeName: user_id
+            KeyType: RANGE
+        BillingMode: PAY_PER_REQUEST
+        TableName: ${param:chatParticipantsTableName}

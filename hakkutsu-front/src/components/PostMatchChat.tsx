@@ -7,12 +7,14 @@ import MessageTemplateSelector from "./MessageTemplateSelector";
 interface PostMatchChatProps {
   messages: ChatMessage[];
   currentUserId: string;
-  onSendMessage: (text: string, restaurant?: Restaurant) => void;
+  onSendMessage: (text: string, restaurant?: Restaurant) => Promise<void> | void;
   onUpdateMessage?: (messageId: string, newText: string) => void;
   onDeleteMessage?: (messageId: string) => void;
   isClosed: boolean;
   attachedRestaurant?: Restaurant | null;
   onRemoveAttachedRestaurant?: () => void;
+  isSending?: boolean;
+  sendError?: string | null;
 }
 
 export default function PostMatchChat({
@@ -24,6 +26,8 @@ export default function PostMatchChat({
   isClosed,
   attachedRestaurant = null,
   onRemoveAttachedRestaurant,
+  isSending = false,
+  sendError = null,
 }: PostMatchChatProps) {
   const [messageText, setMessageText] = useState("");
   const [editingMessageId, setEditingMessageId] = useState<string | null>(null);
@@ -36,13 +40,17 @@ export default function PostMatchChat({
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
-  const handleSend = () => {
+  const handleSend = async () => {
     if (!messageText.trim() && !attachedRestaurant) return;
 
-    onSendMessage(messageText, attachedRestaurant || undefined);
-    setMessageText("");
-    if (onRemoveAttachedRestaurant) {
-      onRemoveAttachedRestaurant();
+    try {
+      await onSendMessage(messageText, attachedRestaurant || undefined);
+      setMessageText("");
+      if (onRemoveAttachedRestaurant) {
+        onRemoveAttachedRestaurant();
+      }
+    } catch (err) {
+      console.error("Failed to send message", err);
     }
   };
 
@@ -260,8 +268,8 @@ export default function PostMatchChat({
         )}
 
         {/* 付与された店舗プレビュー */}
-        {attachedRestaurant && (
-          <div className="mb-2 bg-yellow-50 border-2 border-yellow-400 rounded-lg p-2 flex items-center justify-between">
+      {attachedRestaurant && (
+        <div className="mb-2 bg-yellow-50 border-2 border-yellow-400 rounded-lg p-2 flex items-center justify-between">
             <div className="flex items-center gap-2">
               <img
                 src={attachedRestaurant.imageUrl}
@@ -283,39 +291,45 @@ export default function PostMatchChat({
               ✕
             </button>
           </div>
-        )}
+      )}
 
-        {/* 入力フォーム */}
-        {!isClosed && (
-          <div className="flex gap-2">
-            <MessageTemplateSelector onSelectTemplate={handleSelectTemplate} />
-            <input
-              type="text"
-              value={messageText}
-              onChange={(e) => setMessageText(e.target.value)}
-              onKeyPress={(e) => {
-                if (e.key === "Enter" && !e.shiftKey) {
-                  e.preventDefault();
-                  handleSend();
-                }
-              }}
-              placeholder="メッセージを入力..."
-              className="flex-1 px-4 py-2 border-2 border-gray-300 rounded-lg focus:border-red-600 focus:outline-none text-black"
-              disabled={isClosed}
-            />
-            <button
-              onClick={handleSend}
-              disabled={(!messageText.trim() && !attachedRestaurant) || isClosed}
-              className={`px-6 py-2 rounded-lg font-bold transition ${
-                (!messageText.trim() && !attachedRestaurant) || isClosed
+      {sendError && (
+        <div className="mb-3 bg-red-50 border border-red-200 text-red-700 text-sm px-3 py-2 rounded">
+          {sendError}
+        </div>
+      )}
+
+      {/* 入力フォーム */}
+      {!isClosed && (
+        <div className="flex gap-2">
+          <MessageTemplateSelector onSelectTemplate={handleSelectTemplate} />
+          <input
+            type="text"
+            value={messageText}
+            onChange={(e) => setMessageText(e.target.value)}
+            onKeyPress={(e) => {
+              if (e.key === "Enter" && !e.shiftKey) {
+                e.preventDefault();
+                handleSend();
+              }
+            }}
+            placeholder="メッセージを入力..."
+            className="flex-1 px-4 py-2 border-2 border-gray-300 rounded-lg focus:border-red-600 focus:outline-none text-black"
+            disabled={isClosed || isSending}
+          />
+          <button
+            onClick={handleSend}
+            disabled={(!messageText.trim() && !attachedRestaurant) || isClosed || isSending}
+            className={`px-6 py-2 rounded-lg font-bold transition ${
+                (!messageText.trim() && !attachedRestaurant) || isClosed || isSending
                   ? "bg-gray-300 text-gray-500 cursor-not-allowed"
                   : "bg-red-600 text-white hover:bg-red-700"
               }`}
-            >
-              送信
-            </button>
-          </div>
-        )}
+          >
+            {isSending ? "送信中..." : "送信"}
+          </button>
+        </div>
+      )}
       </div>
     </div>
   );
