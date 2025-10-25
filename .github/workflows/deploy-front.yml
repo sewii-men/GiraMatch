@@ -36,6 +36,13 @@ jobs:
           if [ "${{ github.ref_name }}" = "main" ]; then STAGE='prod'; else STAGE='dev'; fi
           echo "stage=$STAGE" >> $GITHUB_OUTPUT
 
+      - name: Debug current directory
+        run: |
+          pwd
+          ls -la
+          ls -la ./hakkutsu-front || true
+
+
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
