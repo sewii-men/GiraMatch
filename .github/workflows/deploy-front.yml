@@ -8,55 +8,30 @@ on:
 jobs:
   vercel-deploy:
     runs-on: ubuntu-latest
-    
-    # --- ★ 修正点 1 ---
-    # このジョブで実行するコマンドの「デフォルトの作業場所」を
-    # hakkutsu-front ディレクトリに設定
-    defaults:
-      run:
-        working-directory: ./hakkutsu-front
-
     env:
       VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
-      VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
-      VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
-      VERCEL_SCOPE: ${{ secrets.VERCEL_SCOPE }}
-
+      VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}        # 必要なら
+      VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }} # 必要なら
+      VERCEL_SCOPE: ${{ secrets.VERCEL_SCOPE }}           # 任意: チーム slug（例: my-team）
     steps:
       - uses: actions/checkout@v4
-
-      - name: Debug CWD (確認用)
-        # デフォルトが適用され、./hakkutsu-front で実行される
-        run: pwd && ls -la
 
       - uses: actions/setup-node@v4
         with:
           node-version: 20
 
-      - name: Install deps
-        # --- ★ 修正点 2 ---
-        # ./hakkutsu-front で npm ci を実行
-        # (エラーになる場合、hakkutsu-front/package-lock.json がコミットされているか確認)
-        run: npm ci
-
       - name: Determine stage
         id: stg
-        # --- ★ 修正点 3 ---
-        # このステップはリポジトリのルートで実行する (デフォルトを上書き)
         run: |
           if [ "${{ github.ref_name }}" = "main" ]; then STAGE='prod'; else STAGE='dev'; fi
           echo "stage=$STAGE" >> $GITHUB_OUTPUT
-        working-directory: ${{ github.workspace }}
 
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: ${{ secrets.AWS_REGION }}
-        # --- ★ 修正点 3 ---
-        # このステップもリポジトリのルートで実行する
-        working-directory: ${{ github.workspace }}
+          aws-region: ${{ secrets.AWS_REGION != '' && secrets.AWS_REGION || 'ap-northeast-1' }}
 
       - name: Resolve API URL from SAM stack
         id: api
@@ -67,29 +42,43 @@ jobs:
           if [ "$STAGE" = "prod" ]; then STACK=hakkutsu-api-prod; else STACK=hakkutsu-api-dev; fi
           URL=$(aws cloudformation describe-stacks --stack-name "$STACK" \
             --query "Stacks[0].Outputs[?OutputKey=='ApiUrl'].OutputValue | [0]" --output text || true)
+          # aws --output text returns 'None' when query yields nothing
           if [ -z "${URL:-}" ] || [ "$URL" = "None" ] || [ "$URL" = "null" ]; then
-            echo "::error::Failed to resolve ApiUrl from stack '$STACK'"
+            echo "::error::Failed to resolve ApiUrl from stack '$STACK'. Did you deploy the API and export 'ApiUrl'?"
+            echo "Resolved ApiUrl=<empty> for stage=$STAGE"
             exit 1
           fi
           echo "url=$URL" >> "$GITHUB_OUTPUT"
-        # --- ★ 修正点 3 ---
-        # このステップもリポジトリのルートで実行する
-        working-directory: ${{ github.workspace }}
+          echo "Resolved ApiUrl=$URL for stage=$STAGE"
 
-      - name: Deploy to Vercel
+      - name: Vercel auth check
+        run: |
+          npx vercel whoami --token="$VERCEL_TOKEN" ${VERCEL_SCOPE:+--scope="$VERCEL_SCOPE"}
+
+      - name: Pull Vercel Env
+        run: |
+          if [ "${{ github.ref_name }}" = "main" ]; then
+            npx vercel pull --yes --environment=production --token="$VERCEL_TOKEN" ${VERCEL_SCOPE:+--scope="$VERCEL_SCOPE"}
+          else
+            npx vercel pull --yes --environment=preview --token="$VERCEL_TOKEN" ${VERCEL_SCOPE:+--scope="$VERCEL_SCOPE"}
+          fi
+
+      # Skip local 'vercel build' to avoid ENOENT on GH runners
+      # and rely on Vercel's remote builders during deploy.
+
+      - name: Deploy
         env:
           NEXT_PUBLIC_API_URL: ${{ steps.api.outputs.url }}
-        # --- ★ 修正点 1 (defaults) により ---
-        # このステップは ./hakkutsu-front で実行される
         run: |
           set -euo pipefail
           if [ -z "${NEXT_PUBLIC_API_URL:-}" ]; then
-            echo "::error::NEXT_PUBLIC_API_URL is empty"
+            echo "::error::NEXT_PUBLIC_API_URL is empty. Aborting deploy."
             exit 1
           fi
-          
           if [ "${{ github.ref_name }}" = "main" ]; then
+            echo "🚀 Deploying to Production (remote build from repo root)"
             npx vercel deploy --prod --yes --token="$VERCEL_TOKEN" ${VERCEL_SCOPE:+--scope="$VERCEL_SCOPE"} --env NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL
           else
+            echo "🧪 Deploying to Preview (remote build from repo root)"
             npx vercel deploy --yes --token="$VERCEL_TOKEN" ${VERCEL_SCOPE:+--scope="$VERCEL_SCOPE"} --env NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL
           fi
