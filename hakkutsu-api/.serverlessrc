@@ -1,0 +1,6 @@
+{
+  "variables": {
+    "providers": ["sls", "param", "env", "file", "aws"]
+  }
+}
+

@@ -1,0 +1,13 @@
+{
+  "private": true,
+  "name": "hakkutsu",
+  "version": "0.0.0",
+  "description": "Root scripts for deploying the hakkutsu-api service",
+  "scripts": {
+    "deploy:dev": "node hakkutsu-api/node_modules/serverless/bin/serverless.js deploy --stage dev --config hakkutsu-api/serverless.yml",
+    "deploy:prod": "node hakkutsu-api/node_modules/serverless/bin/serverless.js deploy --stage prod --config hakkutsu-api/serverless.yml",
+    "remove:dev": "node hakkutsu-api/node_modules/serverless/bin/serverless.js remove --stage dev --config hakkutsu-api/serverless.yml",
+    "remove:prod": "node hakkutsu-api/node_modules/serverless/bin/serverless.js remove --stage prod --config hakkutsu-api/serverless.yml"
+  }
+}
+

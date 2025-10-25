@@ -3,38 +3,13 @@ org: taiyoyamadahackathon
 # "service" is the name of this project. This will also be added to your AWS resource names.
 service: hakkutsu-api
 
-frameworkVersion: "3"
+frameworkVersion: "~4.18.0"
 
-stages:
-  dev:
-    params:
-      tableName: "users-table-${sls:stage}"
-      matchesTableName: "matches-table-${sls:stage}"
-      chatsTableName: "chats-table-${sls:stage}"
-      messagesTableName: "messages-table-${sls:stage}"
-      checkinsTableName: "checkins-table-${sls:stage}"
-      reviewsTableName: "reviews-table-${sls:stage}"
-      allowedOrigins:
-        - 'http://localhost:3000'
-        - 'https://hakkutsu-git-develop-tai09to06y-3264s-projects.vercel.app'
-      # Allow override via env ALLOWED_ORIGINS; fallback to defaults
-      allowedOriginsCsv: ${env:ALLOWED_ORIGINS, 'http://localhost:3000,https://hakkutsu-git-develop-tai09to06y-3264s-projects.vercel.app'}
-  prod:
-    params:
-      tableName: "users-table-${sls:stage}"
-      matchesTableName: "matches-table-${sls:stage}"
-      chatsTableName: "chats-table-${sls:stage}"
-      messagesTableName: "messages-table-${sls:stage}"
-      checkinsTableName: "checkins-table-${sls:stage}"
-      reviewsTableName: "reviews-table-${sls:stage}"
-      allowedOrigins:
-        - 'https://hakkutsu-app.vercel.app'
-      allowedOriginsCsv: ${env:ALLOWED_ORIGINS, 'https://hakkutsu-app.vercel.app'}
-
+# Use v4-style provider declaration and provider-specific block
 provider:
   name: aws
-  type: aws 
   runtime: nodejs20.x
+  region: ap-northeast-1
   httpApi:
     cors:
       allowedOrigins: ${param:allowedOrigins}
@@ -75,6 +50,75 @@ provider:
     JWT_SECRET: ${env:JWT_SECRET, 'change-me-in-prod'}
     ALLOWED_ORIGINS: ${param:allowedOriginsCsv}
 
+aws:
+  runtime: nodejs20.x
+  region: ap-northeast-1
+  httpApi:
+    cors:
+      allowedOrigins: ${param:allowedOrigins}
+      allowedHeaders:
+        - Content-Type
+        - Authorization
+      allowedMethods:
+        - OPTIONS
+        - GET
+        - POST
+        - PUT
+        - DELETE
+  iam:
+    role:
+      statements:
+        - Effect: Allow
+          Action:
+            - dynamodb:Query
+            - dynamodb:Scan
+            - dynamodb:GetItem
+            - dynamodb:PutItem
+            - dynamodb:UpdateItem
+            - dynamodb:DeleteItem
+          Resource:
+            - Fn::GetAtt: [UsersTable, Arn]
+            - Fn::GetAtt: [MatchesTable, Arn]
+            - Fn::GetAtt: [ChatsTable, Arn]
+            - Fn::GetAtt: [MessagesTable, Arn]
+            - Fn::GetAtt: [CheckinsTable, Arn]
+            - Fn::GetAtt: [ReviewsTable, Arn]
+  environment:
+    USERS_TABLE: ${param:tableName}
+    MATCHES_TABLE: ${param:matchesTableName}
+    CHATS_TABLE: ${param:chatsTableName}
+    MESSAGES_TABLE: ${param:messagesTableName}
+    CHECKINS_TABLE: ${param:checkinsTableName}
+    REVIEWS_TABLE: ${param:reviewsTableName}
+    JWT_SECRET: ${env:JWT_SECRET, 'change-me-in-prod'}
+    ALLOWED_ORIGINS: ${param:allowedOriginsCsv}
+
+stages:
+  dev:
+    params:
+      tableName: "users-table-${sls:stage}"
+      matchesTableName: "matches-table-${sls:stage}"
+      chatsTableName: "chats-table-${sls:stage}"
+      messagesTableName: "messages-table-${sls:stage}"
+      checkinsTableName: "checkins-table-${sls:stage}"
+      reviewsTableName: "reviews-table-${sls:stage}"
+      allowedOrigins:
+        - "http://localhost:3000"
+        - "https://hakkutsu-git-develop-tai09to06y-3264s-projects.vercel.app"
+      allowedOriginsCsv: ${env:ALLOWED_ORIGINS, 'http://localhost:3000,https://hakkutsu-git-develop-tai09to06y-3264s-projects.vercel.app'}
+
+  prod:
+    params:
+      tableName: "users-table-${sls:stage}"
+      matchesTableName: "matches-table-${sls:stage}"
+      chatsTableName: "chats-table-${sls:stage}"
+      messagesTableName: "messages-table-${sls:stage}"
+      checkinsTableName: "checkins-table-${sls:stage}"
+      reviewsTableName: "reviews-table-${sls:stage}"
+      allowedOrigins:
+        - "https://hakkutsu-app.vercel.app"
+      allowedOriginsCsv: ${env:ALLOWED_ORIGINS, 'https://hakkutsu-app.vercel.app'}
+
 functions:
   api:
     handler: handler.handler
@@ -82,7 +126,6 @@ functions:
       - httpApi:
           path: /
           method: any
-
 
 resources:
   Resources:

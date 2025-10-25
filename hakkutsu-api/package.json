@@ -13,6 +13,10 @@
   },
   "scripts": {
     "seed-admin": "node scripts/seed-admin.js",
-    "seed-data": "node scripts/seed-data.js"
+    "seed-data": "node scripts/seed-data.js",
+    "deploy:dev": "node ./node_modules/serverless/bin/serverless.js deploy --stage dev"
+  },
+  "devDependencies": {
+    "serverless": "^4.18.0"
   }
 }
