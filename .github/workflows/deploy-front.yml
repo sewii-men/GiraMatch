@@ -25,6 +25,30 @@ jobs:
       - name: Install deps
         run: npm ci
 
+      - name: Determine stage
+        id: stg
+        run: |
+          if [ "${{ github.ref_name }}" = "main" ]; then STAGE='prod'; else STAGE='dev'; fi
+          echo "stage=$STAGE" >> $GITHUB_OUTPUT
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ secrets.AWS_REGION || 'ap-northeast-1' }}
+
+      - name: Resolve API URL from SAM stack
+        id: api
+        env:
+          STAGE: ${{ steps.stg.outputs.stage }}
+        run: |
+          if [ "$STAGE" = "prod" ]; then STACK=hakkutsu-api-prod; else STACK=hakkutsu-api-dev; fi
+          URL=$(aws cloudformation describe-stacks --stack-name "$STACK" \
+            --query "Stacks[0].Outputs[?OutputKey=='ApiUrl'].OutputValue" --output text)
+          echo "url=$URL" >> $GITHUB_OUTPUT
+          echo "Resolved ApiUrl=$URL for stage=$STAGE"
+
       - name: Pull Vercel Env
         run: |
           if [ "${{ github.ref_name }}" = "main" ]; then
@@ -34,14 +58,20 @@ jobs:
           fi
 
       - name: Build
-        run: npx vercel build --token=$VERCEL_TOKEN
+        env:
+          NEXT_PUBLIC_API_URL: ${{ steps.api.outputs.url }}
+        run: |
+          echo "Using NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL"
+          npx vercel build --token=$VERCEL_TOKEN
 
       - name: Deploy
+        env:
+          NEXT_PUBLIC_API_URL: ${{ steps.api.outputs.url }}
         run: |
           if [ "${{ github.ref_name }}" = "main" ]; then
             echo "🚀 Deploying to Production"
-            npx vercel deploy --prebuilt --prod --token=$VERCEL_TOKEN
+            npx vercel deploy --prebuilt --prod --token=$VERCEL_TOKEN --env NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL
           else
             echo "🧪 Deploying to Preview"
-            npx vercel deploy --prebuilt --token=$VERCEL_TOKEN
+            npx vercel deploy --prebuilt --token=$VERCEL_TOKEN --env NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL
           fi
