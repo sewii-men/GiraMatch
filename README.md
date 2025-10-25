@@ -4,13 +4,13 @@
 
 ## 📋 プロジェクト概要
 
-**Giravent**は、サッカークラブ「ギラヴァンツ北九州」のファンが試合観戦を一緒に楽しむ仲間を見つけるためのモバイルWebアプリケーションです。観戦スタイルや座席の好みに基づいてマッチングし、チャット機能で事前にコミュニケーションを取り、試合後には相互評価を行うことで信頼性の高いコミュニティを形成します。
+**Giravent**は、サッカークラブ「ギラヴァンツ北九州」のファンが試合観戦を一緒に楽しむ仲間を見つけるためのモバイル Web アプリケーションです。観戦スタイルや座席の好みに基づいてマッチングし、チャット機能で事前にコミュニケーションを取り、試合後には相互評価を行うことで信頼性の高いコミュニティを形成します。
 
 ## 🎯 主な機能
 
 - **試合一覧**: 今後の試合スケジュールを閲覧
 - **マッチング**: 観戦スタイルや座席の好みに基づいて同行者を検索
-- **チャット**: マッチした相手と1対1またはグループでメッセージ交換
+- **チャット**: マッチした相手と 1 対 1 またはグループでメッセージ交換
 - **チェックイン**: スタジアム到着時にチェックイン
 - **レビューシステム**: 試合後に相手を評価し、信頼スコアを構築
 
@@ -18,13 +18,13 @@
 
 ### 技術スタック
 
-| レイヤー | 技術 |
-|---------|------|
+| レイヤー           | 技術                                           |
+| ------------------ | ---------------------------------------------- |
 | **フロントエンド** | Next.js 15, React 19, TypeScript, Tailwind CSS |
-| **バックエンド** | Node.js, Express, AWS SAM |
-| **データベース** | AWS DynamoDB |
-| **インフラ** | AWS Lambda, API Gateway, Vercel |
-| **開発環境** | Docker Compose, DynamoDB Local |
+| **バックエンド**   | Node.js, Express, AWS SAM                      |
+| **データベース**   | AWS DynamoDB                                   |
+| **インフラ**       | AWS Lambda, API Gateway, Vercel                |
+| **開発環境**       | Docker Compose, DynamoDB Local                 |
 
 ### プロジェクト構成
 
@@ -101,7 +101,7 @@ npm run dev
 ### 3. アクセス
 
 - **フロントエンド**: http://localhost:3000
-- **バックエンドAPI**: http://localhost:4000
+- **バックエンド API**: http://localhost:4000
 - **DynamoDB Admin**: http://localhost:8000
 
 ## 📚 ドキュメント
@@ -115,23 +115,23 @@ npm run dev
 
 ### テーブル一覧
 
-| テーブル名 | 説明 |
-|-----------|------|
-| Users | ユーザー情報と信頼スコア |
-| Matches | サッカー試合情報 |
-| UserMatches | ユーザーの試合参加と観戦スタイル |
-| MatchRequests | マッチングリクエスト |
-| Conversations | チャット会話 |
-| ConversationParticipants | 会話参加者（多対多） |
-| Messages | メッセージ |
-| CheckIns | スタジアムチェックイン |
-| Reviews | レビュー・評価 |
+| テーブル名               | 説明                             |
+| ------------------------ | -------------------------------- |
+| Users                    | ユーザー情報と信頼スコア         |
+| Matches                  | サッカー試合情報                 |
+| UserMatches              | ユーザーの試合参加と観戦スタイル |
+| MatchRequests            | マッチングリクエスト             |
+| Conversations            | チャット会話                     |
+| ConversationParticipants | 会話参加者（多対多）             |
+| Messages                 | メッセージ                       |
+| CheckIns                 | スタジアムチェックイン           |
+| Reviews                  | レビュー・評価                   |
 
 詳細は [DATABASE_DESIGN.md](./docs/DATABASE_DESIGN.md) を参照してください。
 
 ## 🔧 開発
 
-### ローカルでのAPI開発
+### ローカルでの API 開発
 
 ```bash
 # DynamoDB Localの起動
@@ -194,6 +194,7 @@ vercel --prod
 ```
 
 環境変数の設定例（フロントエンド）:
+
 ```
 NEXT_PUBLIC_API_URL=<ApiUrl の値>  # 例: https://xxxxx.execute-api.ap-northeast-1.amazonaws.com
 ```
@@ -242,7 +243,7 @@ NEXT_PUBLIC_API_URL=<ApiUrl の値>  # 例: https://xxxxx.execute-api.ap-northea
 
 ## 🧪 テスト
 
-### APIのテスト（curl）
+### API のテスト（curl）
 
 ```bash
 # 試合一覧取得
@@ -285,7 +286,7 @@ curl -X POST http://localhost:4000/matches \
 
 1. [実装ガイド](./docs/IMPLEMENTATION_GUIDE.md)
 2. [データベース設計](./docs/DATABASE_DESIGN.md)
-3. GitHubのIssues
+3. GitHub の Issues
 
 ---
 
