@@ -91,7 +91,7 @@ export default function ReviewPage() {
         {/* ヘッダー */}
         <header className="bg-black text-white py-4 px-6 shadow-lg">
           <div className="max-w-6xl mx-auto flex items-center justify-between">
-            <Link href="/">
+            <Link href="/dashboard">
               <h1 className="text-2xl font-bold cursor-pointer">
                 <span className="text-yellow-400">Giravent</span>
               </h1>
@@ -137,7 +137,7 @@ export default function ReviewPage() {
                   次の試合を探す
                 </Link>
                 <Link
-                  href="/"
+                  href="/dashboard"
                   className="bg-yellow-400 text-black px-8 py-3 rounded-full font-bold hover:bg-yellow-500 transition"
                 >
                   ホームに戻る
@@ -156,7 +156,7 @@ export default function ReviewPage() {
       {/* ヘッダー */}
       <header className="bg-black text-white py-4 px-6 shadow-lg">
         <div className="max-w-6xl mx-auto flex items-center justify-between">
-          <Link href="/">
+          <Link href="/dashboard">
             <h1 className="text-2xl font-bold cursor-pointer">
               <span className="text-yellow-400">Giravent</span>
             </h1>

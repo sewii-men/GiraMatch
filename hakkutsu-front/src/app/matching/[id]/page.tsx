@@ -1,69 +1,71 @@
 "use client";
 
 import Link from "next/link";
-import { useParams, useSearchParams } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useParams } from "next/navigation";
+import { useState } from "react";
 import AuthGuard from "@/components/AuthGuard";
 import { useAuth } from "@/lib/auth";
-import { apiBase } from "@/lib/apiBase";
-
-type Candidate = {
-  id: string;
-  nickname: string;
-  icon?: string;
-  style?: string;
-  seat?: string;
-  trustScore?: number;
-  matchRate?: number;
-  bio?: string;
-};
 
 export default function MatchingPage() {
   const params = useParams();
-  const searchParams = useSearchParams();
   const matchId = params.id;
-  const mode = searchParams.get("mode") || "recruit";
   const { token } = useAuth();
 
   const [step, setStep] = useState(1);
-  const [selectedStyle, setSelectedStyle] = useState("");
-  const [selectedSeat, setSelectedSeat] = useState("");
-  const [requestSent, setRequestSent] = useState<string[]>([]);
-  const [candidates, setCandidates] = useState<Candidate[]>([]);
-  const [loading, setLoading] = useState(false);
+  const [selectedConditions, setSelectedConditions] = useState<string[]>([]);
+  const [message, setMessage] = useState("");
 
-  const styles = ["声出し応援", "静かに観戦", "写真撮影メイン", "ファミリー向け"];
-  const seats = ["ゴール裏", "メインスタンド", "バックスタンド", "どこでもOK"];
+  const conditions = [
+    "声出し応援OK",
+    "静かに観戦",
+    "初心者歓迎",
+    "ファミリー向け",
+    "写真撮影メイン",
+    "ゴール裏希望",
+    "メインスタンド希望",
+    "お酒を飲みながら",
+  ];
 
   const handleNext = () => {
-    if (step === 1 && selectedStyle) {
+    if (step === 1 && selectedConditions.length > 0) {
       setStep(2);
-    } else if (step === 2 && selectedSeat) {
-      setStep(3);
     }
   };
 
-  const handleSendRequest = (candidateId: string) => {
-    setRequestSent([...requestSent, candidateId]);
+  const toggleCondition = (condition: string) => {
+    if (selectedConditions.includes(condition)) {
+      setSelectedConditions(selectedConditions.filter((c) => c !== condition));
+    } else {
+      setSelectedConditions([...selectedConditions, condition]);
+    }
   };
 
-  useEffect(() => {
-    if (step === 3) {
-      (async () => {
-        setLoading(true);
-        try {
-          const base = apiBase();
-          const res = await fetch(`${base}/matching/candidates`, {
-            headers: token ? { Authorization: `Bearer ${token}` } : undefined,
-          });
-          const data = await res.json();
-          setCandidates(data);
-        } finally {
-          setLoading(false);
-        }
-      })();
+  const handleRecruit = async () => {
+    try {
+      const base = process.env.NEXT_PUBLIC_API_URL;
+      const res = await fetch(`${base}/matching/recruit`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify({
+          matchId,
+          conditions: selectedConditions,
+          message,
+        }),
+      });
+
+      if (!res.ok) throw new Error("募集の作成に失敗しました");
+
+      // ダッシュボードにリダイレクト
+      window.location.href = "/dashboard";
+    } catch (err) {
+      console.error(err);
+      alert("募集の作成に失敗しました");
     }
-  }, [step, token]);
+  };
+
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-yellow-400 via-yellow-300 to-white">
@@ -71,7 +73,7 @@ export default function MatchingPage() {
       {/* ヘッダー */}
       <header className="bg-black text-white py-4 px-6 shadow-lg hidden">
         <div className="max-w-6xl mx-auto flex items-center justify-between">
-          <Link href="/">
+          <Link href="/dashboard">
             <h1 className="text-2xl font-bold cursor-pointer">
               <span className="text-yellow-400">Giravent</span>
             </h1>
@@ -109,60 +111,58 @@ export default function MatchingPage() {
                   step >= 1 ? "text-red-600" : "text-gray-400"
                 }`}
               >
-                応援スタイル
+                こだわり条件
               </span>
               <span
                 className={`text-sm font-bold ${
                   step >= 2 ? "text-red-600" : "text-gray-400"
                 }`}
               >
-                席の希望
-              </span>
-              <span
-                className={`text-sm font-bold ${
-                  step >= 3 ? "text-red-600" : "text-gray-400"
-                }`}
-              >
-                マッチング
+                メッセージ入力
               </span>
             </div>
             <div className="h-2 bg-gray-200 rounded-full">
               <div
                 className="h-2 bg-red-600 rounded-full transition-all"
-                style={{ width: `${(step / 3) * 100}%` }}
+                style={{ width: `${(step / 2) * 100}%` }}
               ></div>
             </div>
           </div>
 
-          {/* ステップ1: 応援スタイル選択 */}
+          {/* ステップ1: こだわり条件選択 */}
           {step === 1 && (
             <div className="bg-white rounded-lg p-8 shadow-lg">
               <h2 className="text-2xl font-bold text-center mb-6 text-black">
-                応援スタイルを選択
+                こだわり条件を選択
               </h2>
               <p className="text-center text-gray-600 mb-8">
-                あなたの観戦スタイルに合うものを選んでください
+                あなたのこだわり条件を複数選択してください
               </p>
               <div className="grid md:grid-cols-2 gap-4 mb-8">
-                {styles.map((style) => (
+                {conditions.map((condition) => (
                   <button
-                    key={style}
-                    onClick={() => setSelectedStyle(style)}
+                    key={condition}
+                    onClick={() => toggleCondition(condition)}
                     className={`p-6 rounded-lg border-2 transition ${
-                      selectedStyle === style
+                      selectedConditions.includes(condition)
                         ? "border-red-600 bg-red-50"
                         : "border-gray-300 hover:border-yellow-400"
                     }`}
                   >
-                    <p className="text-lg font-bold text-black">{style}</p>
+                    <div className="flex items-center justify-between">
+                      <p className="text-lg font-bold text-black">{condition}</p>
+                      {selectedConditions.includes(condition) && (
+                        <span className="text-red-600 text-2xl">✓</span>
+                      )}
+                    </div>
                   </button>
                 ))}
               </div>
               <button
                 onClick={handleNext}
-                disabled={!selectedStyle}
+                disabled={selectedConditions.length === 0}
                 className={`w-full py-4 rounded-full font-bold text-xl transition ${
-                  selectedStyle
+                  selectedConditions.length > 0
                     ? "bg-red-600 text-white hover:bg-red-700"
                     : "bg-gray-300 text-gray-500 cursor-not-allowed"
                 }`}
@@ -172,30 +172,39 @@ export default function MatchingPage() {
             </div>
           )}
 
-          {/* ステップ2: 席の希望選択 */}
+          {/* ステップ2: メッセージ入力 */}
           {step === 2 && (
             <div className="bg-white rounded-lg p-8 shadow-lg">
               <h2 className="text-2xl font-bold text-center mb-6 text-black">
-                席の希望を選択
+                一言メッセージを入力
               </h2>
               <p className="text-center text-gray-600 mb-8">
-                どのエリアで観戦したいですか?
+                参加者へのメッセージを入力してください
               </p>
-              <div className="grid md:grid-cols-2 gap-4 mb-8">
-                {seats.map((seat) => (
-                  <button
-                    key={seat}
-                    onClick={() => setSelectedSeat(seat)}
-                    className={`p-6 rounded-lg border-2 transition ${
-                      selectedSeat === seat
-                        ? "border-red-600 bg-red-50"
-                        : "border-gray-300 hover:border-yellow-400"
-                    }`}
-                  >
-                    <p className="text-lg font-bold text-black">{seat}</p>
-                  </button>
-                ))}
+
+              {/* 選択した条件の確認 */}
+              <div className="bg-yellow-50 p-4 rounded-lg mb-6">
+                <p className="text-sm font-bold text-gray-700 mb-2">選択した条件:</p>
+                <div className="flex flex-wrap gap-2">
+                  {selectedConditions.map((condition) => (
+                    <span
+                      key={condition}
+                      className="bg-red-600 text-white px-3 py-1 rounded-full text-sm"
+                    >
+                      {condition}
+                    </span>
+                  ))}
+                </div>
               </div>
+
+              <textarea
+                value={message}
+                onChange={(e) => setMessage(e.target.value)}
+                placeholder="例: 初めての観戦です！一緒に楽しく応援しましょう！"
+                rows={5}
+                className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:border-red-600 focus:outline-none text-black mb-8"
+              />
+
               <div className="flex gap-4">
                 <button
                   onClick={() => setStep(1)}
@@ -204,109 +213,20 @@ export default function MatchingPage() {
                   戻る
                 </button>
                 <button
-                  onClick={handleNext}
-                  disabled={!selectedSeat}
+                  onClick={handleRecruit}
+                  disabled={!message.trim()}
                   className={`flex-1 py-4 rounded-full font-bold text-xl transition ${
-                    selectedSeat
+                    message.trim()
                       ? "bg-red-600 text-white hover:bg-red-700"
                       : "bg-gray-300 text-gray-500 cursor-not-allowed"
                   }`}
                 >
-                  マッチング開始
+                  募集する
                 </button>
               </div>
             </div>
           )}
 
-          {/* ステップ3: マッチング候補表示 */}
-          {step === 3 && (
-            <div>
-              <div className="bg-white rounded-lg p-6 shadow-lg mb-6">
-                <h2 className="text-2xl font-bold text-center mb-4 text-black">
-                  {mode === "recruit" ? "あなたを待っている仲間" : "募集中の仲間"}
-                </h2>
-                <div className="bg-yellow-50 p-4 rounded-lg">
-                  <p className="text-sm text-gray-700">
-                    <span className="font-bold">応援スタイル:</span> {selectedStyle}
-                  </p>
-                  <p className="text-sm text-gray-700">
-                    <span className="font-bold">席の希望:</span> {selectedSeat}
-                  </p>
-                </div>
-              </div>
-
-          {/* 候補者リスト */}
-          {loading && <p className="text-center text-gray-700">読み込み中...</p>}
-          <div className="space-y-4">
-            {candidates.map((candidate) => (
-              <div
-                    key={candidate.id}
-                    className="bg-white border-2 border-yellow-400 rounded-lg p-6 shadow-md"
-                  >
-                    <div className="flex items-start justify-between mb-4">
-                      <div className="flex items-center gap-4">
-                        <div className="text-5xl">{candidate.icon}</div>
-                        <div>
-                          <h3 className="text-xl font-bold text-black">
-                            {candidate.nickname}
-                          </h3>
-                          <p className="text-sm text-gray-600">{candidate.bio}</p>
-                        </div>
-                      </div>
-                      <div className="text-right">
-                        <div className="flex items-center gap-1 mb-1">
-                          <span className="text-yellow-500">⭐</span>
-                          <span className="font-bold text-lg">
-                            {candidate.trustScore}
-                          </span>
-                        </div>
-                        <div className="text-sm text-gray-600">
-                          マッチ率: {candidate.matchRate}%
-                        </div>
-                      </div>
-                    </div>
-                    <div className="flex gap-4 mb-4 text-sm">
-                      <div className="flex-1 bg-gray-50 p-3 rounded">
-                        <p className="text-gray-600">応援スタイル</p>
-                        <p className="font-bold text-black">{candidate.style}</p>
-                      </div>
-                      <div className="flex-1 bg-gray-50 p-3 rounded">
-                        <p className="text-gray-600">席の希望</p>
-                        <p className="font-bold text-black">{candidate.seat}</p>
-                      </div>
-                    </div>
-                    {requestSent.includes(candidate.id) ? (
-                      <div className="bg-green-100 border border-green-400 text-green-700 px-4 py-3 rounded text-center font-bold">
-                        リクエスト送信済み ✓
-                      </div>
-                    ) : (
-                      <button
-                        onClick={() => handleSendRequest(candidate.id)}
-                        className="w-full bg-red-600 text-white py-3 rounded-full font-bold hover:bg-red-700 transition"
-                      >
-                        {mode === "recruit" ? "承認する" : "リクエストを送る"}
-                      </button>
-                    )}
-                  </div>
-                ))}
-          </div>
-
-              {/* チャットへ移動ボタン */}
-              {requestSent.length > 0 && (
-                <div className="mt-8 bg-white rounded-lg p-6 shadow-lg text-center">
-                  <p className="text-gray-700 mb-4">
-                    リクエストを送信しました!承認されたらチャットで詳細を相談しましょう。
-                  </p>
-                  <Link
-                    href="/chat"
-                    className="inline-block bg-yellow-400 text-black px-8 py-3 rounded-full font-bold hover:bg-yellow-500 transition"
-                  >
-                    チャットを確認
-                  </Link>
-                </div>
-              )}
-            </div>
-          )}
         </div>
       </main>
     </div>

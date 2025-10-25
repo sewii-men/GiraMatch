@@ -55,6 +55,10 @@
 | 7 | Messages | メッセージ | message_id | conversation_id |
 | 8 | CheckIns | チェックイン | check_in_id | user_id, match_id |
 | 9 | Reviews | レビュー・評価 | review_id | from_user_id, to_user_id, match_id |
+| 10 | Restaurants | 店舗情報 | restaurant_id | venue, name |
+| 11 | PostMatchChats | 試合後チャット | chat_id | match_id |
+| 12 | PostMatchChatMessages | チャットメッセージ | message_id | chat_id, created_at |
+| 13 | RestaurantShares | 店舗共有履歴 | share_id | chat_id, restaurant_id |
 
 ---
 
@@ -315,6 +319,138 @@
 
 ---
 
+### 10. Restaurants（店舗情報）
+
+**説明**: 会場近くの居酒屋・レストラン情報を管理
+
+#### スキーマ
+
+```json
+{
+  "restaurant_id": "string (UUID)",     // PK
+  "venue": "string",                    // 会場名（ミクニワールドスタジアム北九州など）
+  "name": "string",                     // 店舗名
+  "address": "string",                  // 住所
+  "latitude": "number",                 // 緯度
+  "longitude": "number",                // 経度
+  "category": "string",                 // izakaya, cafe, ramen, other
+  "image_url": "string",                // 店舗画像URL
+  "google_map_url": "string",           // GoogleMapリンク
+  "distance": "number",                 // 会場からの距離（メートル）
+  "created_at": "string (ISO 8601)",
+  "updated_at": "string (ISO 8601)"
+}
+```
+
+#### インデックス
+
+- **Primary Key**: `restaurant_id` (HASH)
+- **GSI-1**: `venue` (HASH) + `distance` (RANGE) - 会場別に距離順で取得
+- **GSI-2**: `venue` (HASH) + `name` (RANGE) - 会場別に店舗名で検索
+
+#### アクセスパターン
+
+- 店舗IDで取得: `GetItem(restaurant_id)`
+- 会場近くの店舗を距離順で取得: `Query(GSI-1, venue="ミクニワールドスタジアム北九州")`
+- 店舗名で検索: `Query(GSI-2, venue + name)`
+
+---
+
+### 11. PostMatchChats（試合後チャット）
+
+**説明**: 試合後のギラ飲みチャットを管理
+
+#### スキーマ
+
+```json
+{
+  "chat_id": "string (UUID)",           // PK
+  "match_id": "string",                 // FK: Matches
+  "start_time": "string (ISO 8601)",    // チャット開始時刻（試合終了時刻）
+  "end_time": "string (ISO 8601)",      // チャット終了時刻（23:59）
+  "is_closed": "boolean",               // 閉鎖フラグ
+  "participant_count": "number",        // 参加者数
+  "created_at": "string (ISO 8601)",
+  "updated_at": "string (ISO 8601)"
+}
+```
+
+#### インデックス
+
+- **Primary Key**: `chat_id` (HASH)
+- **GSI-1**: `match_id` (HASH) - 試合IDでチャット取得
+
+#### アクセスパターン
+
+- チャットIDで取得: `GetItem(chat_id)`
+- 試合IDからチャット取得: `Query(GSI-1, match_id)`
+
+---
+
+### 12. PostMatchChatMessages（チャットメッセージ）
+
+**説明**: ギラ飲みチャットのメッセージを管理
+
+#### スキーマ
+
+```json
+{
+  "message_id": "string (UUID)",        // PK
+  "chat_id": "string",                  // FK: PostMatchChats
+  "user_id": "string",                  // FK: Users（送信者）
+  "text": "string",                     // メッセージ本文
+  "restaurant_id": "string",            // FK: Restaurants（付与された店舗、任意）
+  "created_at": "string (ISO 8601)",
+  "updated_at": "string (ISO 8601)",
+  "is_deleted": "boolean"               // 削除フラグ
+}
+```
+
+#### インデックス
+
+- **Primary Key**: `message_id` (HASH)
+- **GSI-1**: `chat_id` (HASH) + `created_at` (RANGE) - チャットのメッセージ履歴
+- **GSI-2**: `user_id` (HASH) + `created_at` (RANGE) - ユーザーの投稿履歴
+
+#### アクセスパターン
+
+- メッセージIDで取得: `GetItem(message_id)`
+- チャットのメッセージ履歴: `Query(GSI-1, chat_id)`
+- ユーザーの投稿履歴: `Query(GSI-2, user_id)`
+
+---
+
+### 13. RestaurantShares（店舗共有履歴）
+
+**説明**: チャット内での店舗共有状況を管理（Map表示用）
+
+#### スキーマ
+
+```json
+{
+  "share_id": "string (UUID)",          // PK
+  "chat_id": "string",                  // FK: PostMatchChats
+  "restaurant_id": "string",            // FK: Restaurants
+  "message_id": "string",               // FK: PostMatchChatMessages
+  "user_id": "string",                  // FK: Users（共有者）
+  "created_at": "string (ISO 8601)"
+}
+```
+
+#### インデックス
+
+- **Primary Key**: `share_id` (HASH)
+- **GSI-1**: `chat_id` (HASH) + `restaurant_id` (RANGE) - チャット別の店舗共有状況
+- **GSI-2**: `restaurant_id` (HASH) + `created_at` (RANGE) - 店舗別の共有履歴
+
+#### アクセスパターン
+
+- 共有IDで取得: `GetItem(share_id)`
+- チャット内の店舗共有状況（Map表示用）: `Query(GSI-1, chat_id)` + 集計処理
+- 店舗の共有履歴: `Query(GSI-2, restaurant_id)`
+
+---
+
 ## エンティティ関係図（ER図）
 
 ```
@@ -328,7 +464,15 @@ User (1) ──< UserMatch >── (M) Match
   │                                     └── Match
   ├──< CheckIn >── Match
   │
-  └──< Review (from/to) >── Match
+  ├──< Review (from/to) >── Match
+  │
+  └──< PostMatchChatMessages >── PostMatchChat ──< Match
+           │                          │
+           │                          └── RestaurantShares ──< Restaurant
+           │
+           └── Restaurant (optional)
+
+Restaurant ──< RestaurantShares
 ```
 
 ---
@@ -599,3 +743,4 @@ ThrottledRequestsAlarm:
 | 日付 | バージョン | 変更内容 |
 |------|-----------|---------|
 | 2025-10-22 | 1.0.0 | 初版作成 |
+| 2025-10-25 | 1.1.0 | ギラ飲み機能用テーブル追加（Restaurants, PostMatchChats, PostMatchChatMessages, RestaurantShares） |

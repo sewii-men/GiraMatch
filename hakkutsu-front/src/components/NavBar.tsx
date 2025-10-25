@@ -16,7 +16,7 @@ export default function NavBar() {
   return (
     <header className="bg-black text-white py-4 px-6 shadow-lg">
       <div className="max-w-6xl mx-auto flex items-center justify-between">
-        <Link href="/">
+        <Link href="/dashboard">
           <h1 className="text-2xl font-bold cursor-pointer">
             <span className="text-yellow-400">Giravent</span>
           </h1>
