@@ -1,0 +1,7 @@
+{
+  "installCommand": "cd hakkutsu-front && npm ci",
+  "buildCommand": "cd hakkutsu-front && npm run build",
+  "devCommand": "cd hakkutsu-front && npm run dev",
+  "outputDirectory": "hakkutsu-front/.next"
+}
+
