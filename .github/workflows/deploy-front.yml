@@ -22,7 +22,7 @@ jobs:
           node-version: 20
 
       - name: Install deps
-        working-directory: hakkutsu-front
+        working-directory: .
         run: npm ci
 
       - name: Determine stage
@@ -61,7 +61,7 @@ jobs:
           npx vercel whoami --token="$VERCEL_TOKEN" ${VERCEL_SCOPE:+--scope="$VERCEL_SCOPE"}
 
       - name: Pull Vercel Env
-        working-directory: hakkutsu-front
+        working-directory: .
         run: |
           if [ "${{ github.ref_name }}" = "main" ]; then
             npx vercel pull --yes --environment=production --token="$VERCEL_TOKEN" ${VERCEL_SCOPE:+--scope="$VERCEL_SCOPE"}
@@ -73,7 +73,7 @@ jobs:
       # and rely on Vercel's remote builders during deploy.
 
       - name: Deploy
-        working-directory: hakkutsu-front
+        working-directory: .
         env:
           NEXT_PUBLIC_API_URL: ${{ steps.api.outputs.url }}
         run: |
