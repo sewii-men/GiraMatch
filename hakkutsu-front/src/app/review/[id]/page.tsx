@@ -125,7 +125,7 @@ export default function ReviewPage() {
                 評価を送信しました!
               </h2>
               <p className="text-gray-700 mb-8">
-                {match.partner.name}さんへの感謝の気持ちが届きました。
+                {(partner?.name ?? "同行者")}さんへの感謝の気持ちが届きました。
                 <br />
                 また一緒にギラヴァンツを応援しましょう!
               </p>
