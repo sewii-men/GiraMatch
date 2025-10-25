@@ -51,6 +51,17 @@ jobs:
           echo "url=$URL" >> "$GITHUB_OUTPUT"
           echo "Resolved ApiUrl=$URL for stage=$STAGE"
 
+      - name: API health check
+        env:
+          API_URL: ${{ steps.api.outputs.url }}
+        run: |
+          set -euo pipefail
+          echo "Probing $API_URL ..."
+          # Basic health endpoint
+          curl -fsSL "$API_URL/" | head -c 200
+          # Public list endpoint
+          curl -fsS -H 'Accept: application/json' "$API_URL/matches" | head -c 200
+
       - name: Vercel auth check
         run: |
           npx vercel whoami --token="$VERCEL_TOKEN" ${VERCEL_SCOPE:+--scope="$VERCEL_SCOPE"}
