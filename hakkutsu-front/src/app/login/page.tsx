@@ -57,7 +57,7 @@ export default function LoginPage() {
               className="w-full border-2 border-gray-300 rounded-lg px-4 py-2 focus:outline-none focus:border-yellow-400"
               value={userId}
               onChange={(e) => setUserId(e.target.value)}
-              placeholder="demo"
+              placeholder="your-id"
               required
             />
           </div>
@@ -68,7 +68,7 @@ export default function LoginPage() {
               className="w-full border-2 border-gray-300 rounded-lg px-4 py-2 focus:outline-none focus:border-yellow-400"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              placeholder="demo1234"
+              placeholder="8文字以上"
               required
             />
           </div>

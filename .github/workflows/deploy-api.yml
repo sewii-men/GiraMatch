@@ -1,0 +1,44 @@
+name: Deploy API
+
+on:
+  push:
+    branches: [main, develop]
+  workflow_dispatch:
+    inputs:
+      stage:
+        description: "Stage to deploy (dev/prod)"
+        required: true
+        default: dev
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: hakkutsu-api
+    env:
+      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      AWS_REGION: ${{ secrets.AWS_REGION || 'us-east-1' }}
+      SERVERLESS_ACCESS_KEY: ${{ secrets.SERVERLESS_ACCESS_KEY }}
+      JWT_SECRET: ${{ secrets.JWT_SECRET || 'change-me-in-prod' }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - run: npm ci
+      - name: Determine stage
+        id: stg
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            STAGE='${{ github.event.inputs.stage }}'
+          else
+            if [ "${{ github.ref_name }}" = "main" ]; then STAGE='prod'; else STAGE='dev'; fi
+          fi
+          echo "stage=$STAGE" >> $GITHUB_OUTPUT
+      - name: Deploy
+        env:
+          # Prefer stage-specific allowed origins from secrets, fallback to default in serverless.yml
+          ALLOWED_ORIGINS: ${{ steps.stg.outputs.stage == 'prod' && secrets.PROD_ALLOWED_ORIGINS || secrets.DEV_ALLOWED_ORIGINS }}
+        run: npx serverless deploy --stage ${{ steps.stg.outputs.stage }}

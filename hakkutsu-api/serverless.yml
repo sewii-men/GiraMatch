@@ -15,7 +15,8 @@ stages:
       allowedOrigins:
         - 'http://localhost:3000'
         - 'https://hakkutsu-git-develop-tai09to06y-3264s-projects.vercel.app'
-      allowedOriginsCsv: 'http://localhost:3000,https://hakkutsu-git-develop-tai09to06y-3264s-projects.vercel.app'
+      # Allow override via env ALLOWED_ORIGINS; fallback to defaults
+      allowedOriginsCsv: ${env:ALLOWED_ORIGINS, 'http://localhost:3000,https://hakkutsu-git-develop-tai09to06y-3264s-projects.vercel.app'}
   prod:
     params:
       tableName: "users-table-${sls:stage}"
@@ -26,7 +27,7 @@ stages:
       reviewsTableName: "reviews-table-${sls:stage}"
       allowedOrigins:
         - 'https://hakkutsu-app.vercel.app'
-      allowedOriginsCsv: 'https://hakkutsu-app.vercel.app'
+      allowedOriginsCsv: ${env:ALLOWED_ORIGINS, 'https://hakkutsu-app.vercel.app'}
 
 provider:
   name: aws

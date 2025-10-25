@@ -90,16 +90,7 @@ export default function MatchDetailPage() {
             <div className="bg-yellow-50 p-4 rounded-lg mb-6">
               <p className="text-gray-700 text-center">{match?.description}</p>
             </div>
-            <div className="flex gap-4 justify-center">
-              <div className="text-center">
-                <p className="text-sm text-gray-600">募集中</p>
-                <p className="text-2xl font-bold text-red-600">12人</p>
-              </div>
-              <div className="text-center">
-                <p className="text-sm text-gray-600">参加希望</p>
-                <p className="text-2xl font-bold text-yellow-600">8人</p>
-              </div>
-            </div>
+            {/* 架空のカウント表示を削除し、DB情報のみを表示 */}
           </div>
 
           {/* 参加方法選択 */}
