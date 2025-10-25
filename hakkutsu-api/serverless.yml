@@ -31,6 +31,7 @@ stages:
 
 provider:
   name: aws
+  type: aws 
   runtime: nodejs20.x
   httpApi:
     cors:
