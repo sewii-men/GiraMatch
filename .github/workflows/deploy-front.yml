@@ -8,11 +8,13 @@ on:
 jobs:
   vercel-deploy:
     runs-on: ubuntu-latest
-    # (補足) もし package.json がサブディレクトリ（例: frontend/）にある場合は、
-    # 以下の working-directory のコメントアウトを解除してください。
-    # defaults:
-    #   run:
-    #     working-directory: ./frontend
+    
+    # --- ★ 修正点 1 ---
+    # このジョブで実行するコマンドの「デフォルトの作業場所」を
+    # hakkutsu-front ディレクトリに設定
+    defaults:
+      run:
+        working-directory: ./hakkutsu-front
 
     env:
       VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
@@ -24,26 +26,27 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Debug CWD (確認用)
+        # デフォルトが適用され、./hakkutsu-front で実行される
         run: pwd && ls -la
-        # (補足) サブディレクトリの場合:
-        # working-directory: ./frontend 
 
       - uses: actions/setup-node@v4
         with:
           node-version: 20
 
       - name: Install deps
-        # package-lock.json がないため npm install に変更（非推奨）
-        # ※ 根本解決は package-lock.json をリポジトリにコミットすることです。
-        run: npm install
-        # (補足) サブディレクトリの場合:
-        # working-directory: ./frontend
+        # --- ★ 修正点 2 ---
+        # ./hakkutsu-front で npm ci を実行
+        # (エラーになる場合、hakkutsu-front/package-lock.json がコミットされているか確認)
+        run: npm ci
 
       - name: Determine stage
         id: stg
+        # --- ★ 修正点 3 ---
+        # このステップはリポジトリのルートで実行する (デフォルトを上書き)
         run: |
           if [ "${{ github.ref_name }}" = "main" ]; then STAGE='prod'; else STAGE='dev'; fi
           echo "stage=$STAGE" >> $GITHUB_OUTPUT
+        working-directory: ${{ github.workspace }}
 
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
@@ -51,6 +54,9 @@ jobs:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: ${{ secrets.AWS_REGION }}
+        # --- ★ 修正点 3 ---
+        # このステップもリポジトリのルートで実行する
+        working-directory: ${{ github.workspace }}
 
       - name: Resolve API URL from SAM stack
         id: api
@@ -66,13 +72,15 @@ jobs:
             exit 1
           fi
           echo "url=$URL" >> "$GITHUB_OUTPUT"
-
-      # Vercelのリモートビルド（`npx vercel deploy`）を利用する場合、
-      # 'vercel pull' ステップは不要なことが多いため削除しました。
+        # --- ★ 修正点 3 ---
+        # このステップもリポジトリのルートで実行する
+        working-directory: ${{ github.workspace }}
 
       - name: Deploy to Vercel
         env:
           NEXT_PUBLIC_API_URL: ${{ steps.api.outputs.url }}
+        # --- ★ 修正点 1 (defaults) により ---
+        # このステップは ./hakkutsu-front で実行される
         run: |
           set -euo pipefail
           if [ -z "${NEXT_PUBLIC_API_URL:-}" ]; then
@@ -80,11 +88,8 @@ jobs:
             exit 1
           fi
           
-          # ユーザーの元のロジックを維持 (VERCEL_SCOPE があれば --scope を付与)
           if [ "${{ github.ref_name }}" = "main" ]; then
             npx vercel deploy --prod --yes --token="$VERCEL_TOKEN" ${VERCEL_SCOPE:+--scope="$VERCEL_SCOPE"} --env NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL
           else
             npx vercel deploy --yes --token="$VERCEL_TOKEN" ${VERCEL_SCOPE:+--scope="$VERCEL_SCOPE"} --env NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL
           fi
-        # (補足) サブディレクトリの場合:
-        # working-directory: ./frontend
