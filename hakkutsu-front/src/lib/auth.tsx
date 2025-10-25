@@ -38,7 +38,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const logout = () => setAuth({ token: null, userId: null });
 
-  const value = useMemo(() => ({ token, userId, setAuth, logout }), [token, userId]);
+  const value = useMemo(() => ({ token, userId, setAuth, logout }), [token, userId, setAuth, logout]);
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }
@@ -48,4 +48,3 @@ export function useAuth() {
   if (!ctx) throw new Error("useAuth must be used within AuthProvider");
   return ctx;
 }
-

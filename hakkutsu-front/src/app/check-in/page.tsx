@@ -30,7 +30,7 @@ export default function CheckInPage() {
       });
       const data = await res.json();
       setMatches(data);
-    } catch (e) {
+    } catch {
       setError("来場チェックの取得に失敗しました");
     } finally {
       setLoading(false);

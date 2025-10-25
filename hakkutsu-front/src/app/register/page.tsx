@@ -43,8 +43,9 @@ export default function RegisterPage() {
       const params = new URLSearchParams(window.location.search);
       const next = params.get("next") || "/";
       window.location.href = next;
-    } catch (e: any) {
-      setError(e.message);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "登録に失敗しました";
+      setError(message);
     } finally {
       setLoading(false);
     }

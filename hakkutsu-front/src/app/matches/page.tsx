@@ -24,7 +24,7 @@ export default function MatchesPage() {
         const res = await fetch(`${base}/matches`);
         const data = await res.json();
         setMatches(data);
-      } catch (e) {
+      } catch {
         setError("試合一覧の取得に失敗しました");
       } finally {
         setLoading(false);

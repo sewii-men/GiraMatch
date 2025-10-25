@@ -36,12 +36,14 @@ export default function ChatDetailPage() {
       if (!res.ok) return;
       const data = await res.json();
       setPartner(data.chat?.partner || null);
-      setMessages((data.messages || []).map((m: any) => ({
-        messageId: m.messageId,
-        senderId: m.senderId,
-        text: m.text,
-        createdAt: m.createdAt,
-      })));
+      setMessages(
+        (data.messages || []).map((m: { messageId: string; senderId: string; text: string; createdAt: string }): Message => ({
+          messageId: m.messageId,
+          senderId: m.senderId,
+          text: m.text,
+          createdAt: m.createdAt,
+        }))
+      );
     };
     load();
   }, [chatId, token]);

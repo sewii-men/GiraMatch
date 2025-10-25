@@ -27,7 +27,7 @@ export default function MatchDetailPage() {
         if (!res.ok) throw new Error("failed");
         const data = await res.json();
         setMatch(data);
-      } catch (e) {
+      } catch {
         setError("試合情報の取得に失敗しました");
       } finally {
         setLoading(false);

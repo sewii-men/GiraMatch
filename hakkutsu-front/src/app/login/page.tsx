@@ -37,8 +37,9 @@ export default function LoginPage() {
       const params = new URLSearchParams(window.location.search);
       const next = params.get("next") || "/";
       window.location.href = next;
-    } catch (e: any) {
-      setError(e.message);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "ログインに失敗しました";
+      setError(message);
     } finally {
       setLoading(false);
     }

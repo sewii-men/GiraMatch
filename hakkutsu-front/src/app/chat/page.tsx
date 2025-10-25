@@ -27,7 +27,7 @@ export default function ChatListPage() {
         });
         const data = await res.json();
         setChatList(data);
-      } catch (e) {
+      } catch {
         setError("チャット一覧の取得に失敗しました");
       } finally {
         setLoading(false);

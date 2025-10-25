@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useParams, useRouter } from "next/navigation";
+import { useParams } from "next/navigation";
 import { useState } from "react";
 import AuthGuard from "@/components/AuthGuard";
 import { useAuth } from "@/lib/auth";
@@ -15,7 +15,6 @@ const templates = [
 
 export default function ReviewPage() {
   const params = useParams();
-  const router = useRouter();
   const matchId = params.id;
   const { token, userId } = useAuth();
 
