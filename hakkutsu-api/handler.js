@@ -21,7 +21,7 @@ const app = express();
 // CORS設定（ステージごとに環境変数から制御）
 const allowedOrigins = (process.env.ALLOWED_ORIGINS || "http://localhost:3000")
   .split(",")
-  .map((s) => s.trim())
+  .map((s) => s.trim().replace(/\/$/, "").toLowerCase())
   .filter(Boolean);
 app.use(
   cors({
@@ -31,7 +31,8 @@ app.use(
       // Allow same-origin/no-origin requests (e.g., curl, server-to-server)
       if (!origin) return callback(null, true);
       // Exact match against allowlist
-      if (allowedOrigins.includes(origin)) return callback(null, true);
+      const normalized = origin.replace(/\/$/, "").toLowerCase();
+      if (allowedOrigins.includes(normalized)) return callback(null, true);
       return callback(new Error("Not allowed by CORS"));
     },
     methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],

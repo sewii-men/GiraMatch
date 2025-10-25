@@ -586,7 +586,7 @@ app.use(express.json());
 
 // CORS設定
 const allowedOrigins = [
-  "https://hakkutsu-1tmea49bc-tai09to06y-3264s-projects.vercel.app",
+  "https://hakkutsu-app-taiyoyamada-tai09to06y-3264s-projects.vercel.app",
   "http://localhost:3000"
 ];
 

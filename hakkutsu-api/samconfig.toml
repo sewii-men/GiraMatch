@@ -6,7 +6,7 @@ region = "ap-northeast-1"
 capabilities = "CAPABILITY_IAM"
 resolve_s3 = true
 confirm_changeset = true
-parameter_overrides = "StageName=dev AllowedOrigins=http://localhost:3000 JwtSecret=local-secret"
+parameter_overrides = "StageName=dev AllowedOrigins=\"http://localhost:3000,https://hakkutsu-app-taiyoyamada-tai09to06y-3264s-projects.vercel.app\" JwtSecret=local-secret"
 
 [prod.deploy.parameters]
 stack_name = "hakkutsu-api-prod"
@@ -16,7 +16,7 @@ region = "ap-northeast-1"
 confirm_changeset = true
 capabilities = "CAPABILITY_IAM"
 disable_rollback = true
-parameter_overrides = "StageName=\"prod\" AllowedOrigins=\"https://hakkutsu-app.vercel.app/\" JwtSecret=\"YkWpoC2nt8ECgHKtYkXo/QaDnd8IadRMO/n1PkiFgjY=\""
+parameter_overrides = "StageName=\"prod\" AllowedOrigins=\"https://hakkutsu-app.vercel.app\" JwtSecret=\"YkWpoC2nt8ECgHKtYkXo/QaDnd8IadRMO/n1PkiFgjY=\""
 image_repositories = []
 
 [prod.global.parameters]

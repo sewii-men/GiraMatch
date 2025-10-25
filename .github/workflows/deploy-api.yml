@@ -39,11 +39,19 @@ jobs:
           echo "stage=$STAGE" >> $GITHUB_OUTPUT
           if [ "$STAGE" = "prod" ]; then
             echo "stack_name=hakkutsu-api-prod" >> $GITHUB_OUTPUT
-            echo "allowed=${{ secrets.PROD_ALLOWED_ORIGINS }}" >> $GITHUB_OUTPUT
+            if [ -z "${{ secrets.PROD_ALLOWED_ORIGINS }}" ]; then
+              echo "allowed=https://hakkutsu-app.vercel.app" >> $GITHUB_OUTPUT
+            else
+              echo "allowed=${{ secrets.PROD_ALLOWED_ORIGINS }}" >> $GITHUB_OUTPUT
+            fi
             echo "jwt=${{ secrets.PROD_JWT_SECRET }}" >> $GITHUB_OUTPUT
           else
             echo "stack_name=hakkutsu-api-dev" >> $GITHUB_OUTPUT
-            echo "allowed=${{ secrets.DEV_ALLOWED_ORIGINS }}" >> $GITHUB_OUTPUT
+            if [ -z "${{ secrets.DEV_ALLOWED_ORIGINS }}" ]; then
+              echo "allowed=http://localhost:3000,https://hakkutsu-app-taiyoyamada-tai09to06y-3264s-projects.vercel.app" >> $GITHUB_OUTPUT
+            else
+              echo "allowed=${{ secrets.DEV_ALLOWED_ORIGINS }}" >> $GITHUB_OUTPUT
+            fi
             echo "jwt=${{ secrets.DEV_JWT_SECRET }}" >> $GITHUB_OUTPUT
           fi
 

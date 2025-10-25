@@ -9,8 +9,8 @@ Parameters:
     Description: Deployment stage name (used in table names)
   AllowedOrigins:
     Type: CommaDelimitedList
-    Default: http://localhost:3000
-    Description: CORS allowed origins for the HTTP API
+    Default: "http://localhost:3000,https://hakkutsu-app.vercel.app,https://hakkutsu-app-taiyoyamada-tai09to06y-3264s-projects.vercel.app"
+    Description: CORS allowed origins for the HTTP API (comma-separated)
   JwtSecret:
     Type: String
     Default: change-me-in-prod
