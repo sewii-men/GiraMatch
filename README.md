@@ -21,7 +21,7 @@
 | レイヤー | 技術 |
 |---------|------|
 | **フロントエンド** | Next.js 15, React 19, TypeScript, Tailwind CSS |
-| **バックエンド** | Node.js, Express, Serverless Framework |
+| **バックエンド** | Node.js, Express, AWS SAM |
 | **データベース** | AWS DynamoDB |
 | **インフラ** | AWS Lambda, API Gateway, Vercel |
 | **開発環境** | Docker Compose, DynamoDB Local |
@@ -36,12 +36,12 @@ hakkutsu-app/
 │   │   └── lib/             # APIクライアント、ユーティリティ
 │   └── package.json
 │
-├── hakkutsu-api/            # Serverless APIバックエンド
-│   ├── handler.js           # メインハンドラー
-│   ├── routes/              # APIルート定義
-│   ├── models/              # データモデル
-│   ├── scripts/             # セットアップスクリプト
-│   ├── serverless.yml       # Serverless設定
+├── hakkutsu-api/            # Express + Lambda バックエンド
+│   ├── handler.js           # Express アプリ本体 + Lambda ハンドラー
+│   ├── local.js             # ローカル実行エントリ（Docker 用）
+│   ├── template.yaml        # AWS SAM テンプレート
+│   ├── scripts/             # セットアップ/シードスクリプト
+│   ├── Dockerfile
 │   └── package.json
 │
 ├── docs/                    # ドキュメント
@@ -162,15 +162,27 @@ npm run reset-tables
 
 ### バックエンド（AWS Lambda）
 
+Serverless Framework は廃止し、AWS SAM で Express を Lambda + HTTP API にデプロイします。
+
+前提: AWS CLI と AWS SAM CLI がセットアップ済みで、認証済みであること。
+
 ```bash
 cd hakkutsu-api
 
-# 開発環境へデプロイ
-serverless deploy --stage dev
+# 依存関係のインストール（初回のみ）
+npm ci
 
-# 本番環境へデプロイ
-serverless deploy --stage prod
+# SAM ビルド
+sam build
+
+# 初回のみガイド付きデプロイ（プロンプトに従って StageName/JwtSecret などを設定）
+sam deploy --guided
+
+# 2回目以降は前回設定を流用
+sam deploy
 ```
+
+デプロイ後、出力 `ApiUrl` が API のベース URL です。
 
 ### フロントエンド（Vercel）
 
@@ -181,9 +193,9 @@ cd hakkutsu-front
 vercel --prod
 ```
 
-環境変数の設定:
+環境変数の設定例（フロントエンド）:
 ```
-NEXT_PUBLIC_API_URL=https://your-api-url.execute-api.us-east-1.amazonaws.com
+NEXT_PUBLIC_API_URL=<ApiUrl の値>  # 例: https://xxxxx.execute-api.ap-northeast-1.amazonaws.com
 ```
 
 ## 📝 API エンドポイント

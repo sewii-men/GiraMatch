@@ -106,7 +106,7 @@ const { CreateTableCommand, ListTablesCommand } = require("@aws-sdk/client-dynam
 // ローカルDynamoDB接続設定
 const client = new DynamoDBClient({
   endpoint: "http://localhost:8000",
-  region: "us-east-1",
+  region: "ap-northeast-1",
   credentials: {
     accessKeyId: "dummy",
     secretAccessKey: "dummy"
@@ -465,7 +465,7 @@ const { DynamoDBDocumentClient } = require("@aws-sdk/lib-dynamodb");
 const config = process.env.IS_OFFLINE
   ? {
       endpoint: "http://localhost:8000",
-      region: "us-east-1",
+      region: "ap-northeast-1",
       credentials: {
         accessKeyId: "dummy",
         secretAccessKey: "dummy"
@@ -831,7 +831,7 @@ serverless deploy --stage prod
 Vercelダッシュボードで環境変数を設定：
 
 ```
-NEXT_PUBLIC_API_URL=https://xxxxx.execute-api.us-east-1.amazonaws.com
+NEXT_PUBLIC_API_URL=https://xxxxx.execute-api.ap-northeast-1.amazonaws.com
 ```
 
 ---

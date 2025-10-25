@@ -16,7 +16,7 @@ services:
       - DYNAMODB_LOCAL_URL=${DYNAMODB_LOCAL_URL:-http://dynamodb:8000}
       - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID:-dummy}
       - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY:-dummy}
-      - AWS_REGION=${AWS_REGION:-us-east-1}
+      - AWS_REGION=${AWS_REGION:-ap-northeast-1}
     depends_on:
       - dynamodb
     restart: on-failure
