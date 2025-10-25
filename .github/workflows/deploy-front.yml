@@ -8,31 +8,29 @@ on:
 jobs:
   vercel-deploy:
     runs-on: ubuntu-latest
-
+    defaults:
+      run:
+        working-directory: ./hakkutsu-front
+    env:
+      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+      VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}        # 必要なら
+      VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }} # 必要なら
+      VERCEL_SCOPE: ${{ secrets.VERCEL_SCOPE }}           # 任意: チーム slug（例: my-team）
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
+      - uses: actions/setup-node@v4
         with:
           node-version: 20
 
       - name: Install deps
         run: npm ci
-        working-directory: ./hakkutsu-front
 
       - name: Determine stage
         id: stg
-        shell: bash
         run: |
           if [ "${{ github.ref_name }}" = "main" ]; then STAGE='prod'; else STAGE='dev'; fi
-          echo "stage=$STAGE" >> "$GITHUB_OUTPUT"
-          if [ "$STAGE" = "prod" ]; then
-            echo "stack_name=hakkutsu-api-prod" >> "$GITHUB_OUTPUT"
-          else
-            echo "stack_name=hakkutsu-api-dev" >> "$GITHUB_OUTPUT"
-          fi
+          echo "stage=$STAGE" >> $GITHUB_OUTPUT
 
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
@@ -44,32 +42,24 @@ jobs:
       - name: Resolve API URL from SAM stack
         id: api
         env:
-          STACK_NAME: ${{ steps.stg.outputs.stack_name }}
-        shell: bash
+          STAGE: ${{ steps.stg.outputs.stage }}
         run: |
           set -euo pipefail
-          URL=$(aws cloudformation describe-stacks --stack-name "$STACK_NAME" \
+          if [ "$STAGE" = "prod" ]; then STACK=hakkutsu-api-prod; else STACK=hakkutsu-api-dev; fi
+          URL=$(aws cloudformation describe-stacks --stack-name "$STACK" \
             --query "Stacks[0].Outputs[?OutputKey=='ApiUrl'].OutputValue | [0]" --output text || true)
+          # aws --output text returns 'None' when query yields nothing
           if [ -z "${URL:-}" ] || [ "$URL" = "None" ] || [ "$URL" = "null" ]; then
-            echo "::error::Failed to resolve ApiUrl from stack '$STACK_NAME'. Did you deploy the API?"
+            echo "::error::Failed to resolve ApiUrl from stack '$STACK'. Did you deploy the API and export 'ApiUrl'?"
+            echo "Resolved ApiUrl=<empty> for stage=$STAGE"
             exit 1
           fi
           echo "url=$URL" >> "$GITHUB_OUTPUT"
-          echo "Resolved ApiUrl=$URL"
+          echo "Resolved ApiUrl=$URL for stage=$STAGE"
 
       - name: Vercel auth check
-        run: npx vercel whoami --token="$VERCEL_TOKEN" ${VERCEL_SCOPE:+--scope="$VERCEL_SCOPE"}
-        env:
-          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
-          VERCEL_SCOPE: ${{ secrets.VERCEL_SCOPE }}
-
-      - name: Ensure project link (optional but robust)
-        run: npx vercel link --yes --project "$VERCEL_PROJECT_ID" --token="$VERCEL_TOKEN" ${VERCEL_SCOPE:+--scope="$VERCEL_SCOPE"}
-        env:
-          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
-          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
-          VERCEL_SCOPE: ${{ secrets.VERCEL_SCOPE }}
-        working-directory: ./hakkutsu-front
+        run: |
+          npx vercel whoami --token="$VERCEL_TOKEN" ${VERCEL_SCOPE:+--scope="$VERCEL_SCOPE"}
 
       - name: Pull Vercel Env
         run: |
@@ -78,33 +68,23 @@ jobs:
           else
             npx vercel pull --yes --environment=preview --token="$VERCEL_TOKEN" ${VERCEL_SCOPE:+--scope="$VERCEL_SCOPE"}
           fi
-        env:
-          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
-          VERCEL_SCOPE: ${{ secrets.VERCEL_SCOPE }}
-        working-directory: ./hakkutsu-front
 
-      - name: Deploy (remote build)
+      # Skip local 'vercel build' to avoid ENOENT on GH runners
+      # and rely on Vercel's remote builders during deploy.
+
+      - name: Deploy
         env:
-          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
-          VERCEL_SCOPE: ${{ secrets.VERCEL_SCOPE }}
           NEXT_PUBLIC_API_URL: ${{ steps.api.outputs.url }}
-        shell: bash
         run: |
           set -euo pipefail
           if [ -z "${NEXT_PUBLIC_API_URL:-}" ]; then
             echo "::error::NEXT_PUBLIC_API_URL is empty. Aborting deploy."
             exit 1
           fi
-
           if [ "${{ github.ref_name }}" = "main" ]; then
             echo "🚀 Deploying to Production (remote build)"
-            npx vercel deploy --prod --yes \
-              --token="$VERCEL_TOKEN" ${VERCEL_SCOPE:+--scope="$VERCEL_SCOPE"} \
-              --env NEXT_PUBLIC_API_URL="$NEXT_PUBLIC_API_URL"
+            npx vercel deploy --prod --yes --token="$VERCEL_TOKEN" ${VERCEL_SCOPE:+--scope="$VERCEL_SCOPE"} --env NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL
           else
             echo "🧪 Deploying to Preview (remote build)"
-            npx vercel deploy --yes \
-              --token="$VERCEL_TOKEN" ${VERCEL_SCOPE:+--scope="$VERCEL_SCOPE"} \
-              --env NEXT_PUBLIC_API_URL="$NEXT_PUBLIC_API_URL"
+            npx vercel deploy --yes --token="$VERCEL_TOKEN" ${VERCEL_SCOPE:+--scope="$VERCEL_SCOPE"} --env NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL
           fi
-        working-directory: ./hakkutsu-front
