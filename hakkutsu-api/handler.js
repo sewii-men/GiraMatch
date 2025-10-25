@@ -16,11 +16,11 @@ const jwt = require("jsonwebtoken");
 
 const app = express();
 
-// CORS設定
-const allowedOrigins = [
-  "https://hakkutsu-1tmea49bc-tai09to06y-3264s-projects.vercel.app",
-  "http://localhost:3000",
-];
+// CORS設定（ステージごとに環境変数から制御）
+const allowedOrigins = (process.env.ALLOWED_ORIGINS || "http://localhost:3000")
+  .split(",")
+  .map((s) => s.trim())
+  .filter(Boolean);
 app.use(
   cors({
     origin: (origin, callback) => {

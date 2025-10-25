@@ -4,7 +4,7 @@ org: taiyoyamadahackathon
 service: hakkutsu-api
 
 stages:
-  default:
+  dev:
     params:
       tableName: "users-table-${sls:stage}"
       matchesTableName: "matches-table-${sls:stage}"
@@ -12,17 +12,31 @@ stages:
       messagesTableName: "messages-table-${sls:stage}"
       checkinsTableName: "checkins-table-${sls:stage}"
       reviewsTableName: "reviews-table-${sls:stage}"
+      allowedOrigins:
+        - 'http://localhost:3000'
+        - 'https://hakkutsu-git-develop-tai09to06y-3264s-projects.vercel.app'
+      allowedOriginsCsv: 'http://localhost:3000,https://hakkutsu-git-develop-tai09to06y-3264s-projects.vercel.app'
+  prod:
+    params:
+      tableName: "users-table-${sls:stage}"
+      matchesTableName: "matches-table-${sls:stage}"
+      chatsTableName: "chats-table-${sls:stage}"
+      messagesTableName: "messages-table-${sls:stage}"
+      checkinsTableName: "checkins-table-${sls:stage}"
+      reviewsTableName: "reviews-table-${sls:stage}"
+      allowedOrigins:
+        - 'https://hakkutsu-app.vercel.app'
+      allowedOriginsCsv: 'https://hakkutsu-app.vercel.app'
 
 provider:
   name: aws
   runtime: nodejs20.x
   httpApi:
     cors:
-      allowedOrigins:
-        - "https://hakkutsu-1tmea49bc-tai09to06y-3264s-projects.vercel.app"
-        - "http://localhost:3000"
+      allowedOrigins: ${param:allowedOrigins}
       allowedHeaders:
         - Content-Type
+        - Authorization
       allowedMethods:
         - OPTIONS
         - GET
@@ -55,6 +69,7 @@ provider:
     CHECKINS_TABLE: ${param:checkinsTableName}
     REVIEWS_TABLE: ${param:reviewsTableName}
     JWT_SECRET: ${env:JWT_SECRET, 'change-me-in-prod'}
+    ALLOWED_ORIGINS: ${param:allowedOriginsCsv}
 
 functions:
   api:
@@ -63,19 +78,6 @@ functions:
       - httpApi:
           path: /
           method: any
-          cors:
-            allowedOrigins:
-              - 'https://hakkutsu-8u8105n1c-tai09to06y-3264s-projects.vercel.app' # ← 本番
-              - 'https://hakkutsu-git-develop-tai09to06y-3264s-projects.vercel.app' # ← developプレビュー
-              - 'http://localhost:3000' # ← ローカル開発
-            allowedHeaders:
-              - Content-Type
-            allowedMethods:
-              - OPTIONS
-              - GET
-              - POST
-              - PUT
-              - DELETE
 
 
 resources:
