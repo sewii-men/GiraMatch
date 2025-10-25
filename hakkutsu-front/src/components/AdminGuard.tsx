@@ -2,6 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
+import { apiBase } from "@/lib/apiBase";
 
 interface AdminGuardProps {
   children: React.ReactNode;
@@ -23,7 +24,7 @@ export default function AdminGuard({ children }: AdminGuardProps) {
       }
 
       try {
-        const base = process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000";
+        const base = apiBase();
         const res = await fetch(`${base}/admin/verify`, {
           headers: { Authorization: `Bearer ${token}` },
         });

@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { apiBase } from "@/lib/apiBase";
 
 interface Review {
   reviewId: string;
@@ -24,7 +25,7 @@ export default function ReviewsAdmin() {
 
   const fetchReviews = async () => {
     try {
-      const base = process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000";
+      const base = apiBase();
       const token = localStorage.getItem("token");
 
       const res = await fetch(`${base}/admin/reviews`, {
@@ -45,7 +46,7 @@ export default function ReviewsAdmin() {
 
   const handleApprove = async (reviewId: string) => {
     try {
-      const base = process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000";
+      const base = apiBase();
       const token = localStorage.getItem("token");
 
       const res = await fetch(`${base}/admin/reviews/${reviewId}/approve`, {
@@ -67,7 +68,7 @@ export default function ReviewsAdmin() {
     if (!confirm("本当に削除しますか？")) return;
 
     try {
-      const base = process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000";
+      const base = apiBase();
       const token = localStorage.getItem("token");
 
       const res = await fetch(`${base}/admin/reviews/${reviewId}`, {

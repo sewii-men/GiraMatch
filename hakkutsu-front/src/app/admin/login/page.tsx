@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { apiBase } from "@/lib/apiBase";
 
 export default function AdminLoginPage() {
   const [userId, setUserId] = useState("");
@@ -16,7 +17,7 @@ export default function AdminLoginPage() {
     setLoading(true);
 
     try {
-      const base = process.env.NEXT_PUBLIC_API_URL;
+      const base = apiBase();
 
       // バックエンドAPIでログイン
       const loginRes = await fetch(`${base}/auth/login`, {

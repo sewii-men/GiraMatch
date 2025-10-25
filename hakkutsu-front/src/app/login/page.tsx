@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
+import { apiBase } from "@/lib/apiBase";
 
 export default function LoginPage() {
   const [userId, setUserId] = useState("");
@@ -24,7 +25,7 @@ export default function LoginPage() {
     }
     setLoading(true);
     try {
-      const base = process.env.NEXT_PUBLIC_API_URL;
+      const base = apiBase();
       const res = await fetch(`${base}/auth/login`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },

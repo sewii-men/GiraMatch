@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { apiBase } from "@/lib/apiBase";
 
 interface Matching {
   chatId: string;
@@ -20,7 +21,7 @@ export default function MatchingsAdmin() {
 
   const fetchMatchings = async () => {
     try {
-      const base = process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000";
+      const base = apiBase();
       const token = localStorage.getItem("token");
 
       // チャットテーブルからマッチング情報を取得

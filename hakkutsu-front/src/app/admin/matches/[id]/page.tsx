@@ -2,6 +2,7 @@
 
 import { useParams, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
+import { apiBase } from "@/lib/apiBase";
 
 interface Match {
   matchId: string;
@@ -35,7 +36,7 @@ export default function MatchDetail() {
 
   const fetchMatch = async () => {
     try {
-      const base = process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000";
+      const base = apiBase();
       const res = await fetch(`${base}/matches/${matchId}`);
 
       if (!res.ok) throw new Error("試合情報の取得に失敗しました");
@@ -52,7 +53,7 @@ export default function MatchDetail() {
 
   const fetchStats = async () => {
     try {
-      const base = process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000";
+      const base = apiBase();
       const token = localStorage.getItem("token");
 
       const res = await fetch(`${base}/admin/matches/${matchId}/stats`, {
@@ -76,7 +77,7 @@ export default function MatchDetail() {
     setError("");
 
     try {
-      const base = process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000";
+      const base = apiBase();
       const token = localStorage.getItem("token");
 
       const res = await fetch(`${base}/admin/matches/${matchId}`, {

@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useEffect, useState } from "react";
+import { apiBase } from "@/lib/apiBase";
 
 export default function MatchDetailPage() {
   const params = useParams();
@@ -22,7 +23,7 @@ export default function MatchDetailPage() {
   useEffect(() => {
     const load = async () => {
       try {
-        const base = process.env.NEXT_PUBLIC_API_URL;
+        const base = apiBase();
         const res = await fetch(`${base}/matches/${matchId}`);
         if (!res.ok) throw new Error("failed");
         const data = await res.json();

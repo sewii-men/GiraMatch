@@ -2,6 +2,7 @@
 
 import { useParams, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
+import { apiBase } from "@/lib/apiBase";
 
 interface User {
   userId: string;
@@ -39,7 +40,7 @@ export default function UserDetail() {
 
   const fetchUser = async () => {
     try {
-      const base = process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000";
+      const base = apiBase();
       const token = localStorage.getItem("token");
 
       const res = await fetch(`${base}/admin/users/${userId}`, {
@@ -60,7 +61,7 @@ export default function UserDetail() {
 
   const fetchActivity = async () => {
     try {
-      const base = process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000";
+      const base = apiBase();
       const token = localStorage.getItem("token");
 
       const res = await fetch(`${base}/admin/users/${userId}/activity`, {
@@ -84,7 +85,7 @@ export default function UserDetail() {
     setError("");
 
     try {
-      const base = process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000";
+      const base = apiBase();
       const token = localStorage.getItem("token");
 
       const res = await fetch(`${base}/admin/users/${userId}`, {
@@ -119,7 +120,7 @@ export default function UserDetail() {
       return;
 
     try {
-      const base = process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000";
+      const base = apiBase();
       const token = localStorage.getItem("token");
 
       const res = await fetch(`${base}/admin/users/${userId}/status`, {
@@ -153,7 +154,7 @@ export default function UserDetail() {
       return;
 
     try {
-      const base = process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000";
+      const base = apiBase();
       const token = localStorage.getItem("token");
 
       const res = await fetch(`${base}/admin/users/${userId}`, {

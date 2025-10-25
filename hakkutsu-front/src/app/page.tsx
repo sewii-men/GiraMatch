@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import { apiBase } from "@/lib/apiBase";
 
 interface Match {
   matchId: string;
@@ -56,7 +57,7 @@ export default function Home() {
 
   const fetchDashboardData = async (token: string) => {
     try {
-      const base = process.env.NEXT_PUBLIC_API_URL;
+      const base = apiBase();
 
       // 試合一覧取得
       const matchesRes = await fetch(`${base}/matches`);

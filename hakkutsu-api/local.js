@@ -1,5 +1,5 @@
 const { DynamoDBClient, CreateTableCommand, DescribeTableCommand } = require("@aws-sdk/client-dynamodb");
-const { DynamoDBDocumentClient, PutCommand, ScanCommand } = require("@aws-sdk/lib-dynamodb");
+const { DynamoDBDocumentClient, PutCommand, ScanCommand, GetCommand } = require("@aws-sdk/lib-dynamodb");
 const { app } = require("./handler");
 const bcrypt = require("bcryptjs");
 
@@ -173,6 +173,42 @@ async function seedDataIfEmpty() {
     ];
     for (const u of users) await doc.send(new PutCommand({ TableName: USERS_TABLE, Item: u }));
     console.log("🌱 Seeded Users");
+  }
+
+  // Always ensure local admin/demo accounts exist with known passwords
+  try {
+    const { Item: adminItem } = await doc.send(
+      new GetCommand({ TableName: USERS_TABLE, Key: { userId: "admin" } })
+    );
+    const ensuredAdmin = {
+      userId: "admin",
+      name: adminItem?.name || "管理者",
+      passwordHash: bcrypt.hashSync("admin1234", 10),
+      isAdmin: true,
+      createdAt: adminItem?.createdAt || new Date().toISOString(),
+      // keep existing flags if present
+      suspended: adminItem?.suspended || false,
+      deleted: adminItem?.deleted || false,
+    };
+    await doc.send(new PutCommand({ TableName: USERS_TABLE, Item: ensuredAdmin }));
+    console.log("🔐 Ensured local admin account (admin/admin1234)");
+
+    const { Item: demoItem } = await doc.send(
+      new GetCommand({ TableName: USERS_TABLE, Key: { userId: "demo" } })
+    );
+    const ensuredDemo = {
+      userId: "demo",
+      name: demoItem?.name || "Demo User",
+      passwordHash: bcrypt.hashSync("demo1234", 10),
+      isAdmin: false,
+      createdAt: demoItem?.createdAt || new Date().toISOString(),
+      suspended: demoItem?.suspended || false,
+      deleted: demoItem?.deleted || false,
+    };
+    await doc.send(new PutCommand({ TableName: USERS_TABLE, Item: ensuredDemo }));
+    console.log("🔐 Ensured local demo account (demo/demo1234)");
+  } catch (e) {
+    console.warn("⚠️  Failed ensuring local admin/demo accounts", e?.message || e);
   }
 
   // Seed chats and messages

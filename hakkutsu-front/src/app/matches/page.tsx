@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
+import { apiBase } from "@/lib/apiBase";
 
 type Match = {
   matchId: string;
@@ -20,7 +21,7 @@ export default function MatchesPage() {
   useEffect(() => {
     const load = async () => {
       try {
-        const base = process.env.NEXT_PUBLIC_API_URL;
+        const base = apiBase();
         const res = await fetch(`${base}/matches`);
         const data = await res.json();
         setMatches(data);

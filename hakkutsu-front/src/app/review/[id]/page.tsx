@@ -5,6 +5,7 @@ import { useParams } from "next/navigation";
 import { useState } from "react";
 import AuthGuard from "@/components/AuthGuard";
 import { useAuth } from "@/lib/auth";
+import { apiBase } from "@/lib/apiBase";
 
 const templates = [
   "今日はありがとうございました!",
@@ -36,7 +37,7 @@ export default function ReviewPage() {
 
   const handleSubmit = async () => {
     if (rating > 0) {
-      const base = process.env.NEXT_PUBLIC_API_URL;
+      const base = apiBase();
       await fetch(`${base}/reviews`, {
         method: "POST",
         headers: { "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}) },

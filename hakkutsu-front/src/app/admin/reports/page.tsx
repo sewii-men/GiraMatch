@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
+import { apiBase } from "@/lib/apiBase";
 
 interface Report {
   reportId: string;
@@ -32,7 +33,7 @@ export default function ReportsAdmin() {
 
   const fetchReports = async () => {
     try {
-      const base = process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000";
+      const base = apiBase();
       const token = localStorage.getItem("token");
 
       const res = await fetch(`${base}/admin/reports`, {

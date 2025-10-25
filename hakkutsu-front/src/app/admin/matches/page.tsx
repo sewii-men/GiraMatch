@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
+import { apiBase } from "@/lib/apiBase";
 
 interface Match {
   matchId: string;
@@ -33,7 +34,7 @@ export default function MatchesAdmin() {
 
   const fetchMatches = async () => {
     try {
-      const base = process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000";
+      const base = apiBase();
       const res = await fetch(`${base}/matches`);
 
       if (!res.ok) throw new Error("試合一覧の取得に失敗しました");
@@ -55,7 +56,7 @@ export default function MatchesAdmin() {
     if (!confirm("本当に削除しますか？")) return;
 
     try {
-      const base = process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000";
+      const base = apiBase();
       const token = localStorage.getItem("token");
 
       const res = await fetch(`${base}/admin/matches/${matchId}`, {
