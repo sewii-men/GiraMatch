@@ -373,11 +373,19 @@ app.get("/matching/recruitments", async (req, res) => {
 app.get("/matching/my-recruitments", requireAuth, async (req, res) => {
   try {
     const userId = req.user.userId;
-    const data = await docClient.send(new ScanCommand({
-      TableName: RECRUITMENTS_TABLE
-    }));
+    const [recruitmentsData, requestsData] = await Promise.all([
+      docClient.send(new ScanCommand({ TableName: RECRUITMENTS_TABLE })),
+      docClient.send(new ScanCommand({ TableName: REQUESTS_TABLE })),
+    ]);
 
-    const myRecruitments = (data.Items || [])
+    const requestCounts = (requestsData.Items || [])
+      .filter((req) => req.recruiterId === userId)
+      .reduce((acc, req) => {
+        acc[req.recruitmentId] = (acc[req.recruitmentId] || 0) + 1;
+        return acc;
+      }, {});
+
+    const myRecruitments = (recruitmentsData.Items || [])
       .filter(r => r.recruiterId === userId)
       .map(r => ({
         id: r.id,
@@ -386,9 +394,11 @@ app.get("/matching/my-recruitments", requireAuth, async (req, res) => {
         opponent: r.opponent,
         date: r.date,
         time: r.time,
+        venue: r.venue,
+        status: r.status || "active",
         conditions: r.conditions || [],
         message: r.message,
-        requestCount: 0, // TODO: Count actual requests
+        requestCount: requestCounts[r.id] || 0,
         createdAt: r.createdAt
       }))
       .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
@@ -397,6 +407,138 @@ app.get("/matching/my-recruitments", requireAuth, async (req, res) => {
   } catch (error) {
     console.error(error);
     res.status(500).json({ error: "Could not fetch my recruitments" });
+  }
+});
+
+// 自分の募集詳細を取得
+app.get("/matching/my-recruitments/:recruitmentId", requireAuth, async (req, res) => {
+  try {
+    const userId = req.user.userId;
+    const { recruitmentId } = req.params;
+
+    const { Item } = await docClient.send(new GetCommand({
+      TableName: RECRUITMENTS_TABLE,
+      Key: { id: recruitmentId }
+    }));
+
+    if (!Item) {
+      return res.status(404).json({ error: "Recruitment not found" });
+    }
+
+    if (Item.recruiterId !== userId) {
+      return res.status(403).json({ error: "Forbidden" });
+    }
+
+    const requestsData = await docClient.send(new ScanCommand({
+      TableName: REQUESTS_TABLE
+    }));
+
+    const requestCount = (requestsData.Items || []).filter(
+      (req) => req.recruitmentId === recruitmentId
+    ).length;
+
+    const recruitment = {
+      id: Item.id,
+      matchId: Item.matchId,
+      matchName: Item.opponent,
+      opponent: Item.opponent,
+      date: Item.date,
+      time: Item.time,
+      venue: Item.venue,
+      status: Item.status || "active",
+      conditions: Item.conditions || [],
+      message: Item.message,
+      requestCount,
+      createdAt: Item.createdAt
+    };
+
+    res.json(recruitment);
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: "Could not fetch recruitment detail" });
+  }
+});
+
+// 自分の募集に届いたリクエスト一覧
+app.get("/matching/my-recruitments/:recruitmentId/requests", requireAuth, async (req, res) => {
+  try {
+    const userId = req.user.userId;
+    const { recruitmentId } = req.params;
+
+    const { Item } = await docClient.send(new GetCommand({
+      TableName: RECRUITMENTS_TABLE,
+      Key: { id: recruitmentId }
+    }));
+
+    if (!Item) {
+      return res.status(404).json({ error: "Recruitment not found" });
+    }
+
+    if (Item.recruiterId !== userId) {
+      return res.status(403).json({ error: "Forbidden" });
+    }
+
+    const requestsData = await docClient.send(new ScanCommand({
+      TableName: REQUESTS_TABLE
+    }));
+
+    const relevantRequests = (requestsData.Items || [])
+      .filter((req) => req.recruitmentId === recruitmentId && req.recruiterId === userId);
+
+    const requesterIds = [...new Set(relevantRequests.map((req) => req.requesterId))];
+    const requesterProfiles = {};
+
+    await Promise.all(
+      requesterIds.map(async (requesterId) => {
+        const { Item: profile } = await docClient.send(new GetCommand({
+          TableName: USERS_TABLE,
+          Key: { userId: requesterId }
+        }));
+        if (profile) requesterProfiles[requesterId] = profile;
+      })
+    );
+
+    const requests = relevantRequests
+      .map((req) => {
+        const profile = requesterProfiles[req.requesterId] || {};
+        return {
+          id: req.id,
+          recruitmentId: req.recruitmentId,
+          requesterId: req.requesterId,
+          recruiterId: req.recruiterId,
+          status: req.status || "pending",
+          createdAt: req.createdAt,
+          requester: {
+            userId: req.requesterId,
+            nickname: profile.nickname || profile.name || req.requesterId,
+            gender: profile.gender,
+            icon: profile.icon,
+            trustScore: profile.trustScore,
+            style: profile.style,
+            seat: profile.seat,
+          },
+        };
+      })
+      .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+
+    const recruitment = {
+      id: Item.id,
+      matchId: Item.matchId,
+      opponent: Item.opponent,
+      date: Item.date,
+      time: Item.time,
+      venue: Item.venue,
+      status: Item.status || "active",
+      message: Item.message,
+      conditions: Item.conditions || [],
+      createdAt: Item.createdAt,
+      requestCount: requests.length,
+    };
+
+    res.json({ recruitment, requests });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: "Could not fetch recruitment requests" });
   }
 });
 

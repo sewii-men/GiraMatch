@@ -59,7 +59,7 @@ export default function RegisterPage() {
           <div>
             <label className="block text-sm text-gray-700 mb-1">ユーザーID</label>
             <input
-              className="w-full border-2 border-gray-300 rounded-lg px-4 py-2 focus:outline-none focus:border-yellow-400"
+              className="w-full border-2 border-gray-300 rounded-lg px-4 py-2 focus:outline-none focus:border-yellow-400 text-black"
               value={userId}
               onChange={(e) => setUserId(e.target.value)}
               placeholder="例: your-id"
@@ -69,7 +69,7 @@ export default function RegisterPage() {
           <div>
             <label className="block text-sm text-gray-700 mb-1">表示名</label>
             <input
-              className="w-full border-2 border-gray-300 rounded-lg px-4 py-2 focus:outline-none focus:border-yellow-400"
+              className="w-full border-2 border-gray-300 rounded-lg px-4 py-2 focus:outline-none focus:border-yellow-400 text-black"
               value={name}
               onChange={(e) => setName(e.target.value)}
               placeholder="例: 山田 太郎"
@@ -80,7 +80,7 @@ export default function RegisterPage() {
             <label className="block text-sm text-gray-700 mb-1">パスワード</label>
             <input
               type="password"
-              className="w-full border-2 border-gray-300 rounded-lg px-4 py-2 focus:outline-none focus:border-yellow-400"
+              className="w-full border-2 border-gray-300 rounded-lg px-4 py-2 focus:outline-none focus:border-yellow-400 text-black"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               placeholder="8文字以上を推奨"

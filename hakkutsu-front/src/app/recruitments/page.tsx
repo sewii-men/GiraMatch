@@ -177,7 +177,7 @@ export default function RecruitmentsPage() {
           {/* ヘッダー */}
           <div className="mb-8">
             <Link
-              href="/"
+              href="/dashboard"
               className="inline-flex items-center gap-2 text-gray-700 hover:text-black mb-4"
             >
               <span>←</span> ダッシュボードに戻る

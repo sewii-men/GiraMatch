@@ -12,6 +12,9 @@ stages:
       messagesTableName: "messages-table-${sls:stage}"
       checkinsTableName: "checkins-table-${sls:stage}"
       reviewsTableName: "reviews-table-${sls:stage}"
+      reportsTableName: "reports-table-${sls:stage}"
+      recruitmentsTableName: "recruitments-table-${sls:stage}"
+      requestsTableName: "requests-table-${sls:stage}"
       allowedOrigins:
         - 'http://localhost:3000'
         - 'https://hakkutsu-git-develop-tai09to06y-3264s-projects.vercel.app'
@@ -24,6 +27,9 @@ stages:
       messagesTableName: "messages-table-${sls:stage}"
       checkinsTableName: "checkins-table-${sls:stage}"
       reviewsTableName: "reviews-table-${sls:stage}"
+      reportsTableName: "reports-table-${sls:stage}"
+      recruitmentsTableName: "recruitments-table-${sls:stage}"
+      requestsTableName: "requests-table-${sls:stage}"
       allowedOrigins:
         - 'https://hakkutsu-app.vercel.app'
       allowedOriginsCsv: 'https://hakkutsu-app.vercel.app'
@@ -61,6 +67,9 @@ provider:
             - Fn::GetAtt: [MessagesTable, Arn]
             - Fn::GetAtt: [CheckinsTable, Arn]
             - Fn::GetAtt: [ReviewsTable, Arn]
+            - Fn::GetAtt: [ReportsTable, Arn]
+            - Fn::GetAtt: [RecruitmentsTable, Arn]
+            - Fn::GetAtt: [RequestsTable, Arn]
   environment:
     USERS_TABLE: ${param:tableName}
     MATCHES_TABLE: ${param:matchesTableName}
@@ -68,6 +77,9 @@ provider:
     MESSAGES_TABLE: ${param:messagesTableName}
     CHECKINS_TABLE: ${param:checkinsTableName}
     REVIEWS_TABLE: ${param:reviewsTableName}
+    REPORTS_TABLE: ${param:reportsTableName}
+    RECRUITMENTS_TABLE: ${param:recruitmentsTableName}
+    REQUESTS_TABLE: ${param:requestsTableName}
     JWT_SECRET: ${env:JWT_SECRET, 'change-me-in-prod'}
     ALLOWED_ORIGINS: ${param:allowedOriginsCsv}
 
@@ -161,3 +173,39 @@ resources:
             KeyType: HASH
         BillingMode: PAY_PER_REQUEST
         TableName: ${param:reviewsTableName}
+
+    ReportsTable:
+      Type: AWS::DynamoDB::Table
+      Properties:
+        AttributeDefinitions:
+          - AttributeName: reportId
+            AttributeType: S
+        KeySchema:
+          - AttributeName: reportId
+            KeyType: HASH
+        BillingMode: PAY_PER_REQUEST
+        TableName: ${param:reportsTableName}
+
+    RecruitmentsTable:
+      Type: AWS::DynamoDB::Table
+      Properties:
+        AttributeDefinitions:
+          - AttributeName: id
+            AttributeType: S
+        KeySchema:
+          - AttributeName: id
+            KeyType: HASH
+        BillingMode: PAY_PER_REQUEST
+        TableName: ${param:recruitmentsTableName}
+
+    RequestsTable:
+      Type: AWS::DynamoDB::Table
+      Properties:
+        AttributeDefinitions:
+          - AttributeName: id
+            AttributeType: S
+        KeySchema:
+          - AttributeName: id
+            KeyType: HASH
+        BillingMode: PAY_PER_REQUEST
+        TableName: ${param:requestsTableName}

@@ -1,16 +1,14 @@
 "use client";
 
 import Link from "next/link";
-import { useParams, useSearchParams } from "next/navigation";
+import { useParams } from "next/navigation";
 import { useState } from "react";
 import AuthGuard from "@/components/AuthGuard";
 import { useAuth } from "@/lib/auth";
 
 export default function MatchingPage() {
   const params = useParams();
-  const searchParams = useSearchParams();
   const matchId = params.id;
-  const mode = searchParams.get("mode") || "recruit";
   const { token } = useAuth();
 
   const [step, setStep] = useState(1);
@@ -61,7 +59,7 @@ export default function MatchingPage() {
       if (!res.ok) throw new Error("募集の作成に失敗しました");
 
       // ダッシュボードにリダイレクト
-      window.location.href = "/";
+      window.location.href = "/dashboard";
     } catch (err) {
       console.error(err);
       alert("募集の作成に失敗しました");
@@ -75,7 +73,7 @@ export default function MatchingPage() {
       {/* ヘッダー */}
       <header className="bg-black text-white py-4 px-6 shadow-lg hidden">
         <div className="max-w-6xl mx-auto flex items-center justify-between">
-          <Link href="/">
+          <Link href="/dashboard">
             <h1 className="text-2xl font-bold cursor-pointer">
               <span className="text-yellow-400">Giravent</span>
             </h1>
