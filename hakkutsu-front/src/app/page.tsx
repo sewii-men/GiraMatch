@@ -32,6 +32,19 @@ interface CheckIn {
   partnerCheckedIn: boolean;
 }
 
+interface Recruitment {
+  id: string;
+  matchId: string;
+  matchName: string;
+  opponent: string;
+  date: string;
+  time: string;
+  conditions: string[];
+  message: string;
+  requestCount: number;
+  createdAt: string;
+}
+
 export default function Home() {
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -39,6 +52,7 @@ export default function Home() {
   const [upcomingMatches, setUpcomingMatches] = useState<Match[]>([]);
   const [activeChats, setActiveChats] = useState<Chat[]>([]);
   const [pendingCheckIns, setPendingCheckIns] = useState<CheckIn[]>([]);
+  const [recentRecruitments, setRecentRecruitments] = useState<Recruitment[]>([]);
   const router = useRouter();
 
   useEffect(() => {
@@ -84,6 +98,15 @@ export default function Home() {
         const pending = checkInsData.filter((c: CheckIn) => !c.myCheckIn);
         setPendingCheckIns(pending.slice(0, 3));
       }
+
+      // 最近の募集取得
+      const recruitmentsRes = await fetch(`${base}/matching/my-recruitments`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (recruitmentsRes.ok) {
+        const recruitmentsData = await recruitmentsRes.json();
+        setRecentRecruitments(recruitmentsData.slice(0, 3));
+      }
     } catch (error) {
       console.error("Failed to fetch dashboard data:", error);
     } finally {
@@ -113,14 +136,30 @@ export default function Home() {
           </div>
 
           {/* クイックアクション */}
-          <div className="grid md:grid-cols-2 gap-6 mb-12">
+          <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-4 mb-12">
             <Link
-              href="/matches"
+              href="/matches?mode=recruit"
               className="bg-red-600 text-white p-6 rounded-xl shadow-lg hover:bg-red-700 transition"
             >
-              <div className="text-3xl mb-2">⚽</div>
-              <h3 className="text-xl font-bold mb-1">試合を探す</h3>
-              <p className="text-sm opacity-90">新しい仲間と観戦しよう</p>
+              <div className="text-3xl mb-2">📢</div>
+              <h3 className="text-xl font-bold mb-1">仲間を募集</h3>
+              <p className="text-sm opacity-90">一緒に観戦する仲間を探す</p>
+            </Link>
+            <Link
+              href="/recruitments"
+              className="bg-yellow-400 text-black p-6 rounded-xl shadow-lg hover:bg-yellow-500 transition"
+            >
+              <div className="text-3xl mb-2">🙋</div>
+              <h3 className="text-xl font-bold mb-1">試合に参加</h3>
+              <p className="text-sm">募集に参加して観戦しよう</p>
+            </Link>
+            <Link
+              href="/my-recruitments"
+              className="bg-white text-black p-6 rounded-xl shadow-lg hover:bg-gray-50 transition border-2 border-yellow-400"
+            >
+              <div className="text-3xl mb-2">📋</div>
+              <h3 className="text-xl font-bold mb-1">マイ募集</h3>
+              <p className="text-sm text-gray-600">自分の募集を管理</p>
             </Link>
             <Link
               href="/chat"
@@ -197,6 +236,64 @@ export default function Home() {
               <p className="text-gray-600 text-center py-4">進行中のチャットはありません</p>
             )}
           </div>
+
+          {/* 最近の募集 */}
+          {recentRecruitments.length > 0 && (
+            <div className="bg-white rounded-xl shadow-lg p-6 mb-6">
+              <div className="flex items-center justify-between mb-4">
+                <h2 className="text-2xl font-bold text-black">最近の募集</h2>
+                <Link href="/my-recruitments" className="text-red-600 font-bold hover:underline">
+                  すべて見る
+                </Link>
+              </div>
+              <div className="space-y-3">
+                {recentRecruitments.map((recruitment) => (
+                  <div
+                    key={recruitment.id}
+                    className="p-4 border-2 border-gray-200 rounded-lg hover:border-yellow-400 transition"
+                  >
+                    <div className="flex items-center justify-between mb-3">
+                      <div className="flex-1">
+                        <p className="font-bold text-black text-lg">{recruitment.opponent}</p>
+                        <p className="text-sm text-gray-600">
+                          {recruitment.date} {recruitment.time}
+                        </p>
+                        <div className="flex flex-wrap gap-1 mt-2">
+                          {recruitment.conditions.slice(0, 3).map((condition, idx) => (
+                            <span
+                              key={idx}
+                              className="bg-red-100 text-red-700 px-2 py-1 rounded text-xs"
+                            >
+                              {condition}
+                            </span>
+                          ))}
+                          {recruitment.conditions.length > 3 && (
+                            <span className="text-xs text-gray-500 px-2 py-1">
+                              +{recruitment.conditions.length - 3}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                      <div className="text-right ml-4">
+                        <div className="bg-yellow-400 text-black px-4 py-2 rounded-full font-bold mb-2">
+                          {recruitment.requestCount} 件
+                        </div>
+                        <Link
+                          href={`/my-recruitments/${recruitment.id}/requests`}
+                          className="inline-block bg-red-600 text-white px-4 py-2 rounded-full text-sm font-bold hover:bg-red-700 transition"
+                        >
+                          リクエスト一覧
+                        </Link>
+                      </div>
+                    </div>
+                    <p className="text-sm text-gray-700 bg-gray-50 p-3 rounded">
+                      {recruitment.message}
+                    </p>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
 
           {/* 来場チェックが必要な試合 */}
           {pendingCheckIns.length > 0 && (

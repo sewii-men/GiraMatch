@@ -40,6 +40,8 @@ const MESSAGES_TABLE = process.env.MESSAGES_TABLE;
 const CHECKINS_TABLE = process.env.CHECKINS_TABLE;
 const REVIEWS_TABLE = process.env.REVIEWS_TABLE;
 const REPORTS_TABLE = process.env.REPORTS_TABLE;
+const RECRUITMENTS_TABLE = process.env.RECRUITMENTS_TABLE;
+const REQUESTS_TABLE = process.env.REQUESTS_TABLE;
 
 // Local DynamoDB (via docker-compose) support
 const isLocal = !!process.env.DYNAMODB_LOCAL_URL;
@@ -87,7 +89,7 @@ function requireAuth(req, res, next) {
     if (!h || typeof h !== "string" || !h.startsWith("Bearer ")) return res.status(401).json({ error: "Unauthorized" });
     const token = h.slice("Bearer ".length).trim();
     const payload = jwt.verify(token, JWT_SECRET);
-    req.user = payload; // expects { sub, name }
+    req.user = { userId: payload.sub, name: payload.name }; // normalize payload
     return next();
   } catch (e) {
     return res.status(401).json({ error: "Unauthorized" });
@@ -264,6 +266,184 @@ app.get("/matching/candidates", requireAuth, async (req, res) => {
   } catch (error) {
     console.error(error);
     res.status(500).json({ error: "Could not list candidates" });
+  }
+});
+
+// ========== Recruitments ==========
+// 募集を作成
+app.post("/matching/recruit", requireAuth, async (req, res) => {
+  try {
+    const { matchId, conditions, message } = req.body;
+    const userId = req.user.userId;
+
+    console.log("Recruit request:", { matchId, userId, conditions, message });
+
+    if (!matchId || !conditions || !message) {
+      return res.status(400).json({ error: "matchId, conditions, and message are required" });
+    }
+
+    // Get match and user details
+    console.log("Fetching match:", matchId);
+    const matchData = await docClient.send(new GetCommand({
+      TableName: MATCHES_TABLE,
+      Key: { matchId: String(matchId) }
+    }));
+
+    console.log("Fetching user:", userId);
+    const userData = await docClient.send(new GetCommand({
+      TableName: USERS_TABLE,
+      Key: { userId: String(userId) }
+    }));
+
+    if (!matchData.Item) {
+      return res.status(404).json({ error: "Match not found" });
+    }
+
+    if (!userData.Item) {
+      return res.status(404).json({ error: "User not found" });
+    }
+
+    const recruitmentId = `recruitment-${Date.now()}-${userId}`;
+    const recruitment = {
+      id: recruitmentId,
+      matchId,
+      recruiterId: userId,
+      conditions,
+      message,
+      opponent: matchData.Item.opponent,
+      date: matchData.Item.date,
+      time: matchData.Item.time,
+      venue: matchData.Item.venue,
+      recruiterNickname: userData.Item.nickname || userData.Item.name,
+      recruiterGender: userData.Item.gender,
+      recruiterIcon: userData.Item.icon,
+      recruiterTrustScore: userData.Item.trustScore || 0,
+      createdAt: new Date().toISOString(),
+      status: "active"
+    };
+
+    await docClient.send(new PutCommand({
+      TableName: RECRUITMENTS_TABLE,
+      Item: recruitment
+    }));
+
+    res.json({ success: true, recruitment });
+  } catch (error) {
+    console.error("Error creating recruitment:", error);
+    res.status(500).json({ error: "Could not create recruitment", details: error.message });
+  }
+});
+
+// 募集一覧を取得
+app.get("/matching/recruitments", async (req, res) => {
+  try {
+    const data = await docClient.send(new ScanCommand({
+      TableName: RECRUITMENTS_TABLE
+    }));
+
+    const activeRecruitments = (data.Items || [])
+      .filter(r => r.status === "active")
+      .map(r => ({
+        id: r.id,
+        matchId: r.matchId,
+        opponent: r.opponent,
+        date: r.date,
+        time: r.time,
+        venue: r.venue,
+        conditions: r.conditions || [],
+        message: r.message,
+        recruiter: {
+          userId: r.recruiterId,
+          nickname: r.recruiterNickname,
+          gender: r.recruiterGender,
+          icon: r.recruiterIcon,
+          trustScore: r.recruiterTrustScore
+        },
+        createdAt: r.createdAt
+      }));
+
+    res.json(activeRecruitments);
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: "Could not fetch recruitments" });
+  }
+});
+
+// 自分の募集一覧を取得
+app.get("/matching/my-recruitments", requireAuth, async (req, res) => {
+  try {
+    const userId = req.user.userId;
+    const data = await docClient.send(new ScanCommand({
+      TableName: RECRUITMENTS_TABLE
+    }));
+
+    const myRecruitments = (data.Items || [])
+      .filter(r => r.recruiterId === userId)
+      .map(r => ({
+        id: r.id,
+        matchId: r.matchId,
+        matchName: r.opponent,
+        opponent: r.opponent,
+        date: r.date,
+        time: r.time,
+        conditions: r.conditions || [],
+        message: r.message,
+        requestCount: 0, // TODO: Count actual requests
+        createdAt: r.createdAt
+      }))
+      .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+
+    res.json(myRecruitments);
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: "Could not fetch my recruitments" });
+  }
+});
+
+// 参加リクエストを送信
+app.post("/matching/request", requireAuth, async (req, res) => {
+  try {
+    const { recruitmentId } = req.body;
+    const userId = req.user.userId;
+
+    if (!recruitmentId) {
+      return res.status(400).json({ error: "recruitmentId is required" });
+    }
+
+    // Get recruitment details
+    const recruitmentData = await docClient.send(new ScanCommand({
+      TableName: RECRUITMENTS_TABLE
+    }));
+    const recruitment = (recruitmentData.Items || []).find(r => r.id === recruitmentId);
+
+    if (!recruitment) {
+      return res.status(404).json({ error: "Recruitment not found" });
+    }
+
+    if (recruitment.recruiterId === userId) {
+      return res.status(400).json({ error: "Cannot request your own recruitment" });
+    }
+
+    const requestId = `request-${Date.now()}-${userId}`;
+    const request = {
+      id: requestId,
+      recruitmentId,
+      requesterId: userId,
+      recruiterId: recruitment.recruiterId,
+      matchId: recruitment.matchId,
+      status: "pending",
+      createdAt: new Date().toISOString()
+    };
+
+    await docClient.send(new PutCommand({
+      TableName: REQUESTS_TABLE,
+      Item: request
+    }));
+
+    res.json({ success: true, request });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: "Could not send request" });
   }
 });
 

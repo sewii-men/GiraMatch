@@ -12,6 +12,8 @@ const MESSAGES_TABLE = process.env.MESSAGES_TABLE || "messages-table-dev";
 const CHECKINS_TABLE = process.env.CHECKINS_TABLE || "checkins-table-dev";
 const REVIEWS_TABLE = process.env.REVIEWS_TABLE || "reviews-table-dev";
 const REPORTS_TABLE = process.env.REPORTS_TABLE || "reports-table-dev";
+const RECRUITMENTS_TABLE = process.env.RECRUITMENTS_TABLE || "recruitments-table-dev";
+const REQUESTS_TABLE = process.env.REQUESTS_TABLE || "requests-table-dev";
 const isLocal = !!process.env.DYNAMODB_LOCAL_URL;
 
 async function ensureUsersTable() {
@@ -275,6 +277,16 @@ async function seedDataIfEmpty() {
       tableName: REPORTS_TABLE,
       attributeDefinitions: [{ AttributeName: "reportId", AttributeType: "S" }],
       keySchema: [{ AttributeName: "reportId", KeyType: "HASH" }],
+    });
+    await ensureTable({
+      tableName: RECRUITMENTS_TABLE,
+      attributeDefinitions: [{ AttributeName: "id", AttributeType: "S" }],
+      keySchema: [{ AttributeName: "id", KeyType: "HASH" }],
+    });
+    await ensureTable({
+      tableName: REQUESTS_TABLE,
+      attributeDefinitions: [{ AttributeName: "id", AttributeType: "S" }],
+      keySchema: [{ AttributeName: "id", KeyType: "HASH" }],
     });
     await seedDataIfEmpty();
   }

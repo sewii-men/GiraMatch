@@ -11,8 +11,10 @@ services:
       - CHECKINS_TABLE=checkins-table-dev
       - REVIEWS_TABLE=reviews-table-dev
       - REPORTS_TABLE=reports-table-dev
+      - RECRUITMENTS_TABLE=recruitments-table-dev
+      - REQUESTS_TABLE=requests-table-dev
       - JWT_SECRET=dev-secret
-      - ALLOWED_ORIGINS=http://localhost:3000
+      - ALLOWED_ORIGINS=http://localhost:3000,http://localhost:3002
       - DYNAMODB_LOCAL_URL=http://dynamodb:8000
       - AWS_ACCESS_KEY_ID=dummy
       - AWS_SECRET_ACCESS_KEY=dummy
