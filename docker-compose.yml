@@ -10,6 +10,7 @@ services:
       - MESSAGES_TABLE=messages-table-dev
       - CHECKINS_TABLE=checkins-table-dev
       - REVIEWS_TABLE=reviews-table-dev
+      - REPORTS_TABLE=reports-table-dev
       - JWT_SECRET=dev-secret
       - ALLOWED_ORIGINS=http://localhost:3000
       - DYNAMODB_LOCAL_URL=http://dynamodb:8000
@@ -18,6 +19,7 @@ services:
       - AWS_REGION=us-east-1
     depends_on:
       - dynamodb
+    restart: on-failure
 
   dynamodb:
     image: amazon/dynamodb-local
