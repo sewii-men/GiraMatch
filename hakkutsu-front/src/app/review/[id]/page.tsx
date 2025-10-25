@@ -1,8 +1,10 @@
 "use client";
 
 import Link from "next/link";
-import { useParams, useRouter } from "next/navigation";
+import { useParams } from "next/navigation";
 import { useState } from "react";
+import AuthGuard from "@/components/AuthGuard";
+import { useAuth } from "@/lib/auth";
 
 const templates = [
   "今日はありがとうございました!",
@@ -13,8 +15,8 @@ const templates = [
 
 export default function ReviewPage() {
   const params = useParams();
-  const router = useRouter();
   const matchId = params.id;
+  const { token, userId } = useAuth();
 
   const [rating, setRating] = useState(0);
   const [message, setMessage] = useState("");
@@ -32,10 +34,21 @@ export default function ReviewPage() {
     },
   };
 
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
     if (rating > 0) {
+      const base = process.env.NEXT_PUBLIC_API_URL;
+      await fetch(`${base}/reviews`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+        body: JSON.stringify({
+          matchId,
+          partnerId: match.partner.id,
+          rating,
+          message,
+          userId: userId || "",
+        }),
+      });
       setSubmitted(true);
-      // 実際のアプリでは、ここでAPIに評価データを送信
     }
   };
 
@@ -106,6 +119,7 @@ export default function ReviewPage() {
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-yellow-400 via-yellow-300 to-white">
+      <AuthGuard />
       {/* ヘッダー */}
       <header className="bg-black text-white py-4 px-6 shadow-lg">
         <div className="max-w-6xl mx-auto flex items-center justify-between">

@@ -6,24 +6,7 @@ export default function Home() {
   return (
     <div className="min-h-screen bg-gradient-to-b from-yellow-400 via-yellow-300 to-white">
       {/* ヘッダー */}
-      <header className="bg-black text-white py-4 px-6 shadow-lg">
-        <div className="max-w-6xl mx-auto flex items-center justify-between">
-          <h1 className="text-2xl font-bold">
-            <span className="text-yellow-400">Giravent</span>
-          </h1>
-          <nav className="flex gap-4">
-            <Link href="/matches" className="hover:text-yellow-400 transition">
-              試合一覧
-            </Link>
-            <Link href="/chat" className="hover:text-yellow-400 transition">
-              チャット
-            </Link>
-            <Link href="/check-in" className="hover:text-yellow-400 transition">
-              来場チェック
-            </Link>
-          </nav>
-        </div>
-      </header>
+      {/* ヘッダーは NavBar に置き換え済み */}
 
       {/* ヒーローセクション */}
       <section className="py-20 px-6 text-center">
@@ -36,12 +19,14 @@ export default function Home() {
             サッカー観戦 × マッチング<br />
             同じ熱量で応援する仲間と出会える新しい観戦体験
           </p>
-          <Link
-            href="/matches"
-            className="inline-block bg-red-600 text-white text-xl font-bold px-12 py-4 rounded-full hover:bg-red-700 transition shadow-lg"
-          >
-            今すぐ始める
-          </Link>
+          <div className="flex items-center justify-center gap-4">
+            <Link href="/matches" className="inline-block bg-red-600 text-white text-xl font-bold px-8 py-4 rounded-full hover:bg-red-700 transition shadow-lg">
+              試合を探す
+            </Link>
+            <Link href="/login" className="inline-block bg-white text-black text-xl font-bold px-8 py-4 rounded-full hover:bg-gray-100 transition shadow-lg">
+              ログイン
+            </Link>
+          </div>
         </div>
       </section>
 

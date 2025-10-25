@@ -2,38 +2,12 @@
 
 import Link from "next/link";
 import { useParams } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import AuthGuard from "@/components/AuthGuard";
+import { useAuth } from "@/lib/auth";
 
-// モックデータ
-const partner = {
-  id: 1,
-  name: "サッカー太郎",
-  icon: "⚽",
-};
-
-const initialMessages = [
-  {
-    id: 1,
-    senderId: 1,
-    text: "はじめまして!一緒に観戦できるの楽しみです!",
-    timestamp: "14:30",
-    isMe: false,
-  },
-  {
-    id: 2,
-    senderId: 2,
-    text: "こちらこそよろしくお願いします!",
-    timestamp: "14:32",
-    isMe: true,
-  },
-  {
-    id: 3,
-    senderId: 1,
-    text: "待ち合わせ場所はどこがいいですか?",
-    timestamp: "14:35",
-    isMe: false,
-  },
-];
+type Message = { messageId: string; senderId: string; text: string; createdAt: string };
+type Partner = { id: string; name: string; icon?: string };
 
 const templates = [
   "小倉駅で集合どうですか?",
@@ -46,24 +20,50 @@ const templates = [
 
 export default function ChatDetailPage() {
   const params = useParams();
-  const [messages, setMessages] = useState(initialMessages);
+  const chatId = String(params.id);
+  const { token, userId } = useAuth();
+  const [partner, setPartner] = useState<Partner | null>(null);
+  const [messages, setMessages] = useState<Message[]>([]);
   const [newMessage, setNewMessage] = useState("");
   const [showTemplates, setShowTemplates] = useState(false);
 
+  useEffect(() => {
+    const load = async () => {
+      const base = process.env.NEXT_PUBLIC_API_URL;
+      const res = await fetch(`${base}/chats/${chatId}`, {
+        headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+      });
+      if (!res.ok) return;
+      const data = await res.json();
+      setPartner(data.chat?.partner || null);
+      setMessages(
+        (data.messages || []).map((m: { messageId: string; senderId: string; text: string; createdAt: string }): Message => ({
+          messageId: m.messageId,
+          senderId: m.senderId,
+          text: m.text,
+          createdAt: m.createdAt,
+        }))
+      );
+    };
+    load();
+  }, [chatId, token]);
+
   const handleSend = () => {
     if (newMessage.trim()) {
-      const message = {
-        id: messages.length + 1,
-        senderId: 2,
-        text: newMessage,
-        timestamp: new Date().toLocaleTimeString("ja-JP", {
-          hour: "2-digit",
-          minute: "2-digit",
-        }),
-        isMe: true,
-      };
-      setMessages([...messages, message]);
-      setNewMessage("");
+      (async () => {
+        const base = process.env.NEXT_PUBLIC_API_URL;
+        const res = await fetch(`${base}/chats/${chatId}/messages`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+          body: JSON.stringify({ text: newMessage, senderId: userId || "" }),
+        });
+        const saved = await res.json();
+        setMessages([
+          ...messages,
+          { messageId: saved.messageId, senderId: saved.senderId, text: saved.text, createdAt: saved.createdAt },
+        ]);
+        setNewMessage("");
+      })();
     }
   };
 
@@ -75,7 +75,8 @@ export default function ChatDetailPage() {
   return (
     <div className="min-h-screen bg-gradient-to-b from-yellow-400 via-yellow-300 to-white flex flex-col">
       {/* ヘッダー */}
-      <header className="bg-black text-white py-4 px-6 shadow-lg">
+      <AuthGuard />
+      <header className="bg-black text-white py-4 px-6 shadow-lg hidden">
         <div className="max-w-6xl mx-auto flex items-center justify-between">
           <Link href="/">
             <h1 className="text-2xl font-bold cursor-pointer">
@@ -106,12 +107,9 @@ export default function ChatDetailPage() {
             <span>←</span> チャット一覧に戻る
           </Link>
           <div className="flex items-center gap-4">
-            <div className="text-4xl">{partner.icon}</div>
+            <div className="text-4xl">{partner?.icon || "🙂"}</div>
             <div>
-              <h2 className="text-xl font-bold text-black">{partner.name}</h2>
-              <p className="text-sm text-gray-600">
-                2025/03/15 (土) vs アビスパ福岡
-              </p>
+              <h2 className="text-xl font-bold text-black">{partner?.name}</h2>
             </div>
           </div>
         </div>
@@ -122,23 +120,19 @@ export default function ChatDetailPage() {
         <div className="max-w-4xl mx-auto space-y-4">
           {messages.map((message) => (
             <div
-              key={message.id}
-              className={`flex ${message.isMe ? "justify-end" : "justify-start"}`}
+              key={message.messageId}
+              className={`flex ${message.senderId === "demo" ? "justify-end" : "justify-start"}`}
             >
               <div
                 className={`max-w-md px-4 py-3 rounded-lg ${
-                  message.isMe
+                  message.senderId === "demo"
                     ? "bg-yellow-400 text-black"
                     : "bg-white text-black border-2 border-gray-200"
                 }`}
               >
                 <p className="mb-1">{message.text}</p>
-                <p
-                  className={`text-xs ${
-                    message.isMe ? "text-gray-700" : "text-gray-500"
-                  }`}
-                >
-                  {message.timestamp}
+                <p className={`text-xs ${message.senderId === "demo" ? "text-gray-700" : "text-gray-500"}`}>
+                  {new Date(message.createdAt).toLocaleTimeString("ja-JP", { hour: "2-digit", minute: "2-digit" })}
                 </p>
               </div>
             </div>
@@ -152,10 +146,7 @@ export default function ChatDetailPage() {
           <div className="max-w-4xl mx-auto">
             <div className="flex items-center justify-between mb-3">
               <h3 className="font-bold text-black">テンプレート</h3>
-              <button
-                onClick={() => setShowTemplates(false)}
-                className="text-gray-600 hover:text-black"
-              >
+              <button onClick={() => setShowTemplates(false)} className="text-gray-600 hover:text-black">
                 閉じる
               </button>
             </div>
@@ -196,9 +187,7 @@ export default function ChatDetailPage() {
               onClick={handleSend}
               disabled={!newMessage.trim()}
               className={`px-6 py-2 rounded-lg font-bold transition ${
-                newMessage.trim()
-                  ? "bg-red-600 text-white hover:bg-red-700"
-                  : "bg-gray-300 text-gray-500 cursor-not-allowed"
+                newMessage.trim() ? "bg-red-600 text-white hover:bg-red-700" : "bg-gray-300 text-gray-500 cursor-not-allowed"
               }`}
             >
               送信
