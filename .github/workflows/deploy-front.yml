@@ -15,6 +15,7 @@ jobs:
       VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
       VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}        # 必要なら
       VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }} # 必要なら
+      VERCEL_SCOPE: ${{ secrets.VERCEL_SCOPE }}           # 任意: チーム slug（例: my-team）
     steps:
       - uses: actions/checkout@v4
 
@@ -43,35 +44,56 @@ jobs:
         env:
           STAGE: ${{ steps.stg.outputs.stage }}
         run: |
+          set -euo pipefail
           if [ "$STAGE" = "prod" ]; then STACK=hakkutsu-api-prod; else STACK=hakkutsu-api-dev; fi
           URL=$(aws cloudformation describe-stacks --stack-name "$STACK" \
-            --query "Stacks[0].Outputs[?OutputKey=='ApiUrl'].OutputValue" --output text)
-          echo "url=$URL" >> $GITHUB_OUTPUT
+            --query "Stacks[0].Outputs[?OutputKey=='ApiUrl'].OutputValue | [0]" --output text || true)
+          # aws --output text returns 'None' when query yields nothing
+          if [ -z "${URL:-}" ] || [ "$URL" = "None" ] || [ "$URL" = "null" ]; then
+            echo "::error::Failed to resolve ApiUrl from stack '$STACK'. Did you deploy the API and export 'ApiUrl'?"
+            echo "Resolved ApiUrl=<empty> for stage=$STAGE"
+            exit 1
+          fi
+          echo "url=$URL" >> "$GITHUB_OUTPUT"
           echo "Resolved ApiUrl=$URL for stage=$STAGE"
+
+      - name: Vercel auth check
+        run: |
+          npx vercel whoami --token="$VERCEL_TOKEN" ${VERCEL_SCOPE:+--scope="$VERCEL_SCOPE"}
 
       - name: Pull Vercel Env
         run: |
           if [ "${{ github.ref_name }}" = "main" ]; then
-            npx vercel pull --yes --environment=production --token=$VERCEL_TOKEN
+            npx vercel pull --yes --environment=production --token="$VERCEL_TOKEN" ${VERCEL_SCOPE:+--scope="$VERCEL_SCOPE"}
           else
-            npx vercel pull --yes --environment=preview --token=$VERCEL_TOKEN
+            npx vercel pull --yes --environment=preview --token="$VERCEL_TOKEN" ${VERCEL_SCOPE:+--scope="$VERCEL_SCOPE"}
           fi
 
       - name: Build
         env:
           NEXT_PUBLIC_API_URL: ${{ steps.api.outputs.url }}
         run: |
+          set -euo pipefail
+          if [ -z "${NEXT_PUBLIC_API_URL:-}" ]; then
+            echo "::error::NEXT_PUBLIC_API_URL is empty. Aborting build."
+            exit 1
+          fi
           echo "Using NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL"
-          npx vercel build --token=$VERCEL_TOKEN
+          npx vercel build --token="$VERCEL_TOKEN" ${VERCEL_SCOPE:+--scope="$VERCEL_SCOPE"}
 
       - name: Deploy
         env:
           NEXT_PUBLIC_API_URL: ${{ steps.api.outputs.url }}
         run: |
+          set -euo pipefail
+          if [ -z "${NEXT_PUBLIC_API_URL:-}" ]; then
+            echo "::error::NEXT_PUBLIC_API_URL is empty. Aborting deploy."
+            exit 1
+          fi
           if [ "${{ github.ref_name }}" = "main" ]; then
             echo "🚀 Deploying to Production"
-            npx vercel deploy --prebuilt --prod --token=$VERCEL_TOKEN --env NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL
+            npx vercel deploy --prebuilt --prod --token="$VERCEL_TOKEN" ${VERCEL_SCOPE:+--scope="$VERCEL_SCOPE"} --env NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL
           else
             echo "🧪 Deploying to Preview"
-            npx vercel deploy --prebuilt --token=$VERCEL_TOKEN --env NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL
+            npx vercel deploy --prebuilt --token="$VERCEL_TOKEN" ${VERCEL_SCOPE:+--scope="$VERCEL_SCOPE"} --env NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL
           fi
