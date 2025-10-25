@@ -13,18 +13,35 @@ jobs:
         working-directory: hakkutsu-front
     env:
       VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
-      VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
-      VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+      VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}        # 必要なら
+      VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}# 必要なら
     steps:
       - uses: actions/checkout@v4
+
       - uses: actions/setup-node@v4
         with:
           node-version: 20
-      - run: npm ci
+
+      - name: Install deps
+        run: npm ci
+
       - name: Pull Vercel Env
-        run: npx vercel pull --yes --environment=${{ github.ref_name == 'main' && 'production' || 'preview' }} --token=$VERCEL_TOKEN
+        run: |
+          if [ "${{ github.ref_name }}" = "main" ]; then
+            npx vercel pull --yes --environment=production --token=$VERCEL_TOKEN
+          else
+            npx vercel pull --yes --environment=preview --token=$VERCEL_TOKEN
+          fi
+
       - name: Build
         run: npx vercel build --token=$VERCEL_TOKEN
-      - name: Deploy
-        run: npx vercel deploy --prebuilt --token=$VERCEL_TOKEN ${{ github.ref_name == 'main' && '--prod' || '' }}
 
+      - name: Deploy
+        run: |
+          if [ "${{ github.ref_name }}" = "main" ]; then
+            echo "🚀 Deploying to Production"
+            npx vercel deploy --prebuilt --prod --token=$VERCEL_TOKEN
+          else
+            echo "🧪 Deploying to Preview"
+            npx vercel deploy --prebuilt --token=$VERCEL_TOKEN
+          fi
