@@ -40,6 +40,8 @@ export default function UsersAdmin() {
       if (!res.ok) throw new Error("ユーザー一覧の取得に失敗しました");
 
       const data = await res.json();
+      console.log("取得したユーザーデータ:", data);
+      console.log("最初のユーザー:", data[0]);
       setUsers(data);
       setFilteredUsers(data);
     } catch (err) {
@@ -163,14 +165,14 @@ export default function UsersAdmin() {
               <th className="px-4 py-3 text-center">操作</th>
             </tr>
           </thead>
-          <tbody className="text-white">
+          <tbody className="bg-gray-900">
             {filteredUsers.length > 0 ? (
               filteredUsers.map((user) => (
-                <tr key={user.userId} className="border-t border-gray-700">
-                  <td className="px-4 py-3 font-mono text-sm">
+                <tr key={user.userId} className="border-t border-gray-700 hover:bg-gray-800">
+                  <td className="px-4 py-3 font-mono text-sm text-white">
                     {user.userId}
                   </td>
-                  <td className="px-4 py-3 font-medium">{user.name}</td>
+                  <td className="px-4 py-3 font-medium text-white">{user.name}</td>
                   <td className="px-4 py-3 text-gray-400">
                     {user.createdAt
                       ? new Date(user.createdAt).toLocaleDateString("ja-JP")

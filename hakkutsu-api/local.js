@@ -120,7 +120,20 @@ async function seedDataIfEmpty() {
   const existingUsers = await doc.send(new ScanCommand({ TableName: USERS_TABLE }));
   if ((existingUsers.Items || []).length === 0) {
     const users = [
-      { userId: "demo", name: "Demo User", passwordHash: bcrypt.hashSync("demo1234", 10) },
+      {
+        userId: "admin",
+        name: "管理者",
+        passwordHash: bcrypt.hashSync("admin1234", 10),
+        isAdmin: true,
+        createdAt: new Date().toISOString()
+      },
+      {
+        userId: "demo",
+        name: "Demo User",
+        passwordHash: bcrypt.hashSync("demo1234", 10),
+        isAdmin: false,
+        createdAt: new Date().toISOString()
+      },
       {
         userId: "partner1",
         name: "サッカー太郎",

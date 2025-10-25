@@ -11,17 +11,27 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // 簡易認証チェック（[2]で本格実装予定）
-    const token = localStorage.getItem("token");
-    const userId = localStorage.getItem("userId");
+    // ログインページの場合は認証チェックをスキップ
+    if (pathname === "/admin/login") {
+      setLoading(false);
+      return;
+    }
 
-    if (!token || !userId) {
-      router.push("/login?redirect=/admin");
+    // 管理者認証チェック
+    const adminAuth = localStorage.getItem("adminAuthenticated");
+
+    if (adminAuth !== "true") {
+      router.push("/admin/login");
     } else {
       setIsAuthenticated(true);
     }
     setLoading(false);
-  }, [router]);
+  }, [router, pathname]);
+
+  // ログインページの場合は認証チェックなしで表示
+  if (pathname === "/admin/login") {
+    return <>{children}</>;
+  }
 
   if (loading) {
     return (
@@ -59,19 +69,14 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
             </Link>
             <div className="flex items-center gap-4">
               <span className="text-gray-400 text-sm">
-                管理者: {localStorage.getItem("userId")}
+                管理者: {localStorage.getItem("adminUserId")}
               </span>
-              <Link
-                href="/"
-                className="text-white hover:text-yellow-400 transition-colors px-3 py-2 rounded"
-              >
-                ユーザー画面へ
-              </Link>
+        
               <button
                 onClick={() => {
-                  localStorage.removeItem("token");
-                  localStorage.removeItem("userId");
-                  router.push("/login");
+                  localStorage.removeItem("adminAuthenticated");
+                  localStorage.removeItem("adminUserId");
+                  router.push("/admin/login");
                 }}
                 className="bg-red-600 text-white px-4 py-2 rounded hover:bg-red-700 transition-colors font-medium"
               >

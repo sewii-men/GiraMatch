@@ -39,6 +39,8 @@ export default function MatchesAdmin() {
       if (!res.ok) throw new Error("試合一覧の取得に失敗しました");
 
       const data = await res.json();
+      console.log("取得した試合データ:", data);
+      console.log("最初の試合:", data[0]);
       setMatches(data);
       setFilteredMatches(data);
     } catch (err) {
@@ -154,15 +156,15 @@ export default function MatchesAdmin() {
               <th className="px-4 py-3 text-center">操作</th>
             </tr>
           </thead>
-          <tbody className="text-white">
+          <tbody className="bg-gray-900">
             {filteredMatches.length > 0 ? (
               filteredMatches.map((match) => (
-                <tr key={match.matchId} className="border-t border-gray-700">
-                  <td className="px-4 py-3 font-mono text-sm">{match.matchId}</td>
-                  <td className="px-4 py-3 font-medium">{match.opponent}</td>
-                  <td className="px-4 py-3">{match.date}</td>
-                  <td className="px-4 py-3">{match.time}</td>
-                  <td className="px-4 py-3">{match.venue}</td>
+                <tr key={match.matchId} className="border-t border-gray-700 hover:bg-gray-800">
+                  <td className="px-4 py-3 font-mono text-sm text-white">{match.matchId}</td>
+                  <td className="px-4 py-3 font-medium text-white">{match.opponent}</td>
+                  <td className="px-4 py-3 text-white">{match.date}</td>
+                  <td className="px-4 py-3 text-white">{match.time}</td>
+                  <td className="px-4 py-3 text-white">{match.venue}</td>
                   <td className="px-4 py-3">
                     <StatusBadge status={match.status} />
                   </td>
