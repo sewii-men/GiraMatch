@@ -2,6 +2,7 @@
 
 import { ChatMessage, Restaurant } from "@/types/postMatchChat";
 import { useEffect, useRef, useState } from "react";
+import Image from "next/image";
 import MessageTemplateSelector from "./MessageTemplateSelector";
 
 interface PostMatchChatProps {
@@ -123,9 +124,8 @@ export default function PostMatchChat({
               className={`flex ${isCurrentUser ? "justify-end" : "justify-start"}`}
             >
               <div
-                className={`max-w-[70%] ${
-                  isCurrentUser ? "bg-red-100" : "bg-gray-100"
-                } rounded-lg p-3`}
+                className={`max-w-[70%] ${isCurrentUser ? "bg-red-100" : "bg-gray-100"
+                  } rounded-lg p-3`}
               >
                 {/* ユーザー情報 */}
                 {!isCurrentUser && (
@@ -177,15 +177,15 @@ export default function PostMatchChat({
                 {message.restaurant && (
                   <div className="mt-2 bg-white rounded-lg p-2 border-2 border-yellow-400">
                     <div className="flex items-center gap-2">
-                      <img
-                        src={message.restaurant.imageUrl}
-                        alt={message.restaurant.name}
-                        className="w-12 h-12 rounded object-cover"
-                        onError={(e) => {
-                          const target = e.target as HTMLImageElement;
-                          target.src = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='50' height='50'%3E%3Crect fill='%23ddd' width='50' height='50'/%3E%3C/svg%3E";
-                        }}
-                      />
+                      <div className="relative w-12 h-12 rounded overflow-hidden">
+                        <Image
+                          src={message.restaurant.imageUrl}
+                          alt={message.restaurant.name}
+                          fill
+                          className="object-cover"
+                          sizes="48px"
+                        />
+                      </div>
                       <div className="flex-1">
                         <p className="font-bold text-sm text-black">
                           {message.restaurant.name}
@@ -268,18 +268,18 @@ export default function PostMatchChat({
         )}
 
         {/* 付与された店舗プレビュー */}
-      {attachedRestaurant && (
-        <div className="mb-2 bg-yellow-50 border-2 border-yellow-400 rounded-lg p-2 flex items-center justify-between">
+        {attachedRestaurant && (
+          <div className="mb-2 bg-yellow-50 border-2 border-yellow-400 rounded-lg p-2 flex items-center justify-between">
             <div className="flex items-center gap-2">
-              <img
-                src={attachedRestaurant.imageUrl}
-                alt={attachedRestaurant.name}
-                className="w-10 h-10 rounded object-cover"
-                onError={(e) => {
-                  const target = e.target as HTMLImageElement;
-                  target.src = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='50' height='50'%3E%3Crect fill='%23ddd' width='50' height='50'/%3E%3C/svg%3E";
-                }}
-              />
+              <div className="relative w-10 h-10 rounded overflow-hidden">
+                <Image
+                  src={attachedRestaurant.imageUrl}
+                  alt={attachedRestaurant.name}
+                  fill
+                  className="object-cover"
+                  sizes="40px"
+                />
+              </div>
               <p className="text-sm font-bold text-black">
                 {attachedRestaurant.name}
               </p>
@@ -291,45 +291,44 @@ export default function PostMatchChat({
               ✕
             </button>
           </div>
-      )}
+        )}
 
-      {sendError && (
-        <div className="mb-3 bg-red-50 border border-red-200 text-red-700 text-sm px-3 py-2 rounded">
-          {sendError}
-        </div>
-      )}
+        {sendError && (
+          <div className="mb-3 bg-red-50 border border-red-200 text-red-700 text-sm px-3 py-2 rounded">
+            {sendError}
+          </div>
+        )}
 
-      {/* 入力フォーム */}
-      {!isClosed && (
-        <div className="flex gap-2">
-          <MessageTemplateSelector onSelectTemplate={handleSelectTemplate} />
-          <input
-            type="text"
-            value={messageText}
-            onChange={(e) => setMessageText(e.target.value)}
-            onKeyPress={(e) => {
-              if (e.key === "Enter" && !e.shiftKey) {
-                e.preventDefault();
-                handleSend();
-              }
-            }}
-            placeholder="メッセージを入力..."
-            className="flex-1 px-4 py-2 border-2 border-gray-300 rounded-lg focus:border-red-600 focus:outline-none text-black"
-            disabled={isClosed || isSending}
-          />
-          <button
-            onClick={handleSend}
-            disabled={(!messageText.trim() && !attachedRestaurant) || isClosed || isSending}
-            className={`px-6 py-2 rounded-lg font-bold transition ${
-                (!messageText.trim() && !attachedRestaurant) || isClosed || isSending
-                  ? "bg-gray-300 text-gray-500 cursor-not-allowed"
-                  : "bg-red-600 text-white hover:bg-red-700"
-              }`}
-          >
-            {isSending ? "送信中..." : "送信"}
-          </button>
-        </div>
-      )}
+        {/* 入力フォーム */}
+        {!isClosed && (
+          <div className="flex gap-2">
+            <MessageTemplateSelector onSelectTemplate={handleSelectTemplate} />
+            <input
+              type="text"
+              value={messageText}
+              onChange={(e) => setMessageText(e.target.value)}
+              onKeyPress={(e) => {
+                if (e.key === "Enter" && !e.shiftKey) {
+                  e.preventDefault();
+                  handleSend();
+                }
+              }}
+              placeholder="メッセージを入力..."
+              className="flex-1 px-4 py-2 border-2 border-gray-300 rounded-lg focus:border-red-600 focus:outline-none text-black"
+              disabled={isClosed || isSending}
+            />
+            <button
+              onClick={handleSend}
+              disabled={(!messageText.trim() && !attachedRestaurant) || isClosed || isSending}
+              className={`px-6 py-2 rounded-lg font-bold transition ${(!messageText.trim() && !attachedRestaurant) || isClosed || isSending
+                ? "bg-gray-300 text-gray-500 cursor-not-allowed"
+                : "bg-red-600 text-white hover:bg-red-700"
+                }`}
+            >
+              {isSending ? "送信中..." : "送信"}
+            </button>
+          </div>
+        )}
       </div>
     </div>
   );

@@ -42,8 +42,8 @@ export default function MatchesPage() {
         const data = await res.json();
         if (Array.isArray(data)) {
           setMatches(data);
-        } else if (data && Array.isArray((data as any).items)) {
-          setMatches((data as any).items);
+        } else if (data && typeof data === "object" && "items" in data && Array.isArray(data.items)) {
+          setMatches(data.items as Match[]);
         } else {
           // Defensive: ensure state is always an array
           setMatches([]);

@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Image from "next/image";
 import { Restaurant } from "@/types/postMatchChat";
 
 interface RestaurantCardProps {
@@ -23,29 +24,27 @@ export default function RestaurantCard({
       <div className="bg-white rounded-lg border-2 border-gray-200 p-4 hover:border-yellow-400 transition">
         {/* 店舗画像 */}
         <div
-          className="w-full h-32 bg-gray-200 rounded-lg mb-3 overflow-hidden cursor-pointer hover:opacity-80 transition"
+          className="relative w-full h-32 bg-gray-200 rounded-lg mb-3 overflow-hidden cursor-pointer hover:opacity-80 transition"
           onClick={() => setShowImageModal(true)}
           title="クリックで拡大"
         >
-          <img
+          <Image
             src={restaurant.imageUrl}
             alt={restaurant.name}
-            className="w-full h-full object-cover"
-            onError={(e) => {
-              const target = e.target as HTMLImageElement;
-              target.src = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='200'%3E%3Crect fill='%23ddd' width='200' height='200'/%3E%3Ctext fill='%23999' x='50%25' y='50%25' dominant-baseline='middle' text-anchor='middle' font-family='sans-serif' font-size='16'%3ENo Image%3C/text%3E%3C/svg%3E";
-            }}
+            fill
+            className="object-cover"
+            sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
           />
         </div>
 
-      {/* 店舗情報 */}
-      <div className="mb-3">
-        <h3 className="font-bold text-lg text-black mb-1">{restaurant.name}</h3>
-        <p className="text-sm text-gray-600 mb-1">{restaurant.address}</p>
-        {restaurant.distance && (
-          <p className="text-xs text-gray-500">会場から約 {restaurant.distance}m</p>
-        )}
-      </div>
+        {/* 店舗情報 */}
+        <div className="mb-3">
+          <h3 className="font-bold text-lg text-black mb-1">{restaurant.name}</h3>
+          <p className="text-sm text-gray-600 mb-1">{restaurant.address}</p>
+          {restaurant.distance && (
+            <p className="text-xs text-gray-500">会場から約 {restaurant.distance}m</p>
+          )}
+        </div>
 
         {/* アクションボタン */}
         <div className="flex gap-2">
@@ -80,16 +79,16 @@ export default function RestaurantCard({
             </button>
 
             {/* 拡大画像 */}
-            <img
-              src={restaurant.imageUrl}
-              alt={restaurant.name}
-              className="max-w-full max-h-[85vh] object-contain rounded-lg"
-              onClick={(e) => e.stopPropagation()}
-              onError={(e) => {
-                const target = e.target as HTMLImageElement;
-                target.src = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='800' height='600'%3E%3Crect fill='%23ddd' width='800' height='600'/%3E%3Ctext fill='%23999' x='50%25' y='50%25' dominant-baseline='middle' text-anchor='middle' font-family='sans-serif' font-size='32'%3ENo Image%3C/text%3E%3C/svg%3E";
-              }}
-            />
+            <div className="relative max-w-full max-h-[85vh]" onClick={(e) => e.stopPropagation()}>
+              <Image
+                src={restaurant.imageUrl}
+                alt={restaurant.name}
+                width={800}
+                height={600}
+                className="max-w-full max-h-[85vh] object-contain rounded-lg"
+                style={{ width: 'auto', height: 'auto' }}
+              />
+            </div>
 
             {/* 店舗名 */}
             <div className="bg-white px-4 py-2 mt-2 rounded-lg">

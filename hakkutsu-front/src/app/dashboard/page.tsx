@@ -538,7 +538,6 @@ export default function Home() {
                 {recentRecruitments.map((recruitment) => {
                   const status = recruitment.status || "active";
                   const isCancelled = status === "cancelled";
-                  const isDeleted = status === "deleted";
 
                   return (
                     <div
@@ -594,8 +593,8 @@ export default function Home() {
                               onClick={() => handleCancelRecruitment(recruitment.id, recruitment.opponent)}
                               disabled={cancellingId === recruitment.id}
                               className={`px-4 py-2 rounded-full text-sm font-bold transition ${cancellingId === recruitment.id
-                                  ? "bg-gray-300 text-gray-500 cursor-not-allowed"
-                                  : "bg-white border-2 border-red-600 text-red-600 hover:bg-red-50"
+                                ? "bg-gray-300 text-gray-500 cursor-not-allowed"
+                                : "bg-white border-2 border-red-600 text-red-600 hover:bg-red-50"
                                 }`}
                             >
                               {cancellingId === recruitment.id ? "取り消し中..." : "募集を取り消す"}
@@ -606,8 +605,8 @@ export default function Home() {
                               onClick={() => handleDeleteRecruitment(recruitment.id, recruitment.opponent)}
                               disabled={deletingId === recruitment.id}
                               className={`px-4 py-2 rounded-full text-sm font-bold transition ${deletingId === recruitment.id
-                                  ? "bg-gray-300 text-gray-500 cursor-not-allowed"
-                                  : "bg-gray-600 text-white hover:bg-gray-700"
+                                ? "bg-gray-300 text-gray-500 cursor-not-allowed"
+                                : "bg-gray-600 text-white hover:bg-gray-700"
                                 }`}
                             >
                               {deletingId === recruitment.id ? "削除中..." : "削除"}
@@ -729,8 +728,8 @@ export default function Home() {
                             onClick={() => handleRemoveRequestCard(request.requestId)}
                             disabled={removingRequestId === request.requestId}
                             className={`px-4 py-2 rounded-full text-sm font-bold transition ${removingRequestId === request.requestId
-                                ? "bg-gray-300 text-gray-500 cursor-not-allowed"
-                                : "bg-white border-2 border-gray-400 text-gray-700 hover:bg-gray-50"
+                              ? "bg-gray-300 text-gray-500 cursor-not-allowed"
+                              : "bg-white border-2 border-gray-400 text-gray-700 hover:bg-gray-50"
                               }`}
                           >
                             {removingRequestId === request.requestId ? "処理中..." : "表示から削除"}
@@ -740,8 +739,8 @@ export default function Home() {
                             onClick={() => handleCancelSentRequest(request)}
                             disabled={cancellingRequestId === request.requestId}
                             className={`px-4 py-2 rounded-full text-sm font-bold transition ${cancellingRequestId === request.requestId
-                                ? "bg-gray-300 text-gray-500 cursor-not-allowed"
-                                : "bg-white border-2 border-red-600 text-red-600 hover:bg-red-50"
+                              ? "bg-gray-300 text-gray-500 cursor-not-allowed"
+                              : "bg-white border-2 border-red-600 text-red-600 hover:bg-red-50"
                               }`}
                           >
                             {cancellingRequestId === request.requestId
