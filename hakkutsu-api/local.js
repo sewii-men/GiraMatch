@@ -216,7 +216,6 @@ async function ensureLocalAdminOnly() {
       attributeDefinitions: [{ AttributeName: "id", AttributeType: "S" }],
       keySchema: [{ AttributeName: "id", KeyType: "HASH" }],
     });
-    await seedDataIfEmpty();
   }
   app.listen(port, () => {
     console.log(`🚀 Local API running at http://localhost:${port}`);
