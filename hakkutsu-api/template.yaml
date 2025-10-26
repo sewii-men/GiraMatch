@@ -271,9 +271,18 @@ Resources:
       AttributeDefinitions:
         - AttributeName: chat_id
           AttributeType: S
+        - AttributeName: match_id
+          AttributeType: S
       KeySchema:
         - AttributeName: chat_id
           KeyType: HASH
+      GlobalSecondaryIndexes:
+        - IndexName: MatchIdIndex
+          KeySchema:
+            - AttributeName: match_id
+              KeyType: HASH
+          Projection:
+            ProjectionType: ALL
 
   PostMatchChatMessagesTable:
     Type: AWS::DynamoDB::Table
@@ -285,11 +294,22 @@ Resources:
           AttributeType: S
         - AttributeName: message_id
           AttributeType: S
+        - AttributeName: created_at
+          AttributeType: S
       KeySchema:
         - AttributeName: chat_id
           KeyType: HASH
         - AttributeName: message_id
           KeyType: RANGE
+      GlobalSecondaryIndexes:
+        - IndexName: ChatIdCreatedAtIndex
+          KeySchema:
+            - AttributeName: chat_id
+              KeyType: HASH
+            - AttributeName: created_at
+              KeyType: RANGE
+          Projection:
+            ProjectionType: ALL
 
   RestaurantSharesTable:
     Type: AWS::DynamoDB::Table
