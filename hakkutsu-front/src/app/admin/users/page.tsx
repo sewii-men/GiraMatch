@@ -7,6 +7,12 @@ import { apiBase } from "@/lib/apiBase";
 interface User {
   userId: string;
   name: string;
+  nickname?: string;
+  email?: string;
+  birthDate?: string;
+  gender?: string;
+  icon?: string;
+  trustScore?: number;
   createdAt: string;
   isAdmin?: boolean;
   suspended?: boolean;
@@ -78,7 +84,7 @@ export default function UsersAdmin() {
     }
   };
 
-  
+
 
   if (loading) {
     return <div className="text-white text-xl">読み込み中...</div>;
@@ -113,42 +119,38 @@ export default function UsersAdmin() {
         <div className="flex gap-2">
           <button
             onClick={() => setFilterStatus("all")}
-            className={`px-4 py-2 rounded transition-colors ${
-              filterStatus === "all"
-                ? "bg-yellow-400 text-black font-bold"
-                : "bg-gray-800 text-white hover:bg-gray-700"
-            }`}
+            className={`px-4 py-2 rounded transition-colors ${filterStatus === "all"
+              ? "bg-yellow-400 text-black font-bold"
+              : "bg-gray-800 text-white hover:bg-gray-700"
+              }`}
           >
             全て ({users.length})
           </button>
           <button
             onClick={() => setFilterStatus("active")}
-            className={`px-4 py-2 rounded transition-colors ${
-              filterStatus === "active"
-                ? "bg-yellow-400 text-black font-bold"
-                : "bg-gray-800 text-white hover:bg-gray-700"
-            }`}
+            className={`px-4 py-2 rounded transition-colors ${filterStatus === "active"
+              ? "bg-yellow-400 text-black font-bold"
+              : "bg-gray-800 text-white hover:bg-gray-700"
+              }`}
           >
             有効 (
             {users.filter((u) => !u.suspended && !u.deleted).length})
           </button>
           <button
             onClick={() => setFilterStatus("suspended")}
-            className={`px-4 py-2 rounded transition-colors ${
-              filterStatus === "suspended"
-                ? "bg-yellow-400 text-black font-bold"
-                : "bg-gray-800 text-white hover:bg-gray-700"
-            }`}
+            className={`px-4 py-2 rounded transition-colors ${filterStatus === "suspended"
+              ? "bg-yellow-400 text-black font-bold"
+              : "bg-gray-800 text-white hover:bg-gray-700"
+              }`}
           >
             停止中 ({users.filter((u) => u.suspended).length})
           </button>
           <button
             onClick={() => setFilterStatus("deleted")}
-            className={`px-4 py-2 rounded transition-colors ${
-              filterStatus === "deleted"
-                ? "bg-yellow-400 text-black font-bold"
-                : "bg-gray-800 text-white hover:bg-gray-700"
-            }`}
+            className={`px-4 py-2 rounded transition-colors ${filterStatus === "deleted"
+              ? "bg-yellow-400 text-black font-bold"
+              : "bg-gray-800 text-white hover:bg-gray-700"
+              }`}
           >
             削除済み ({users.filter((u) => u.deleted).length})
           </button>
@@ -162,6 +164,9 @@ export default function UsersAdmin() {
             <tr>
               <th className="px-4 py-3 text-left">ユーザーID</th>
               <th className="px-4 py-3 text-left">名前</th>
+              <th className="px-4 py-3 text-left">ニックネーム</th>
+              <th className="px-4 py-3 text-left">性別</th>
+              <th className="px-4 py-3 text-left">信頼スコア</th>
               <th className="px-4 py-3 text-left">登録日</th>
               <th className="px-4 py-3 text-left">権限</th>
               <th className="px-4 py-3 text-left">ステータス</th>
@@ -176,6 +181,21 @@ export default function UsersAdmin() {
                     {user.userId}
                   </td>
                   <td className="px-4 py-3 font-medium text-white">{user.name}</td>
+                  <td className="px-4 py-3 text-white">
+                    {user.icon && <span className="mr-2">{user.icon}</span>}
+                    {user.nickname || "-"}
+                  </td>
+                  <td className="px-4 py-3 text-white">
+                    {user.gender === "male" ? "👨 男性" : user.gender === "female" ? "👩 女性" : user.gender === "other" ? "その他" : "-"}
+                  </td>
+                  <td className="px-4 py-3 text-white">
+                    {user.trustScore !== undefined ? (
+                      <span className="flex items-center gap-1">
+                        <span className="text-yellow-400">⭐</span>
+                        {user.trustScore.toFixed(1)}
+                      </span>
+                    ) : "-"}
+                  </td>
                   <td className="px-4 py-3 text-gray-400">
                     {user.createdAt
                       ? new Date(user.createdAt).toLocaleDateString("ja-JP")
@@ -207,7 +227,7 @@ export default function UsersAdmin() {
               ))
             ) : (
               <tr>
-                <td colSpan={6} className="px-4 py-8 text-center text-gray-400">
+                <td colSpan={9} className="px-4 py-8 text-center text-gray-400">
                   {searchTerm || filterStatus !== "all"
                     ? "条件に一致するユーザーが見つかりません"
                     : "ユーザーがいません"}

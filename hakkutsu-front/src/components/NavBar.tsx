@@ -6,7 +6,7 @@ import { useAuth } from "@/lib/auth";
 
 export default function NavBar() {
   const pathname = usePathname();
-  const { token, userId, logout } = useAuth();
+  const { token, userId, displayName, logout } = useAuth();
 
   // 管理者画面ではNavBarを表示しない
   if (pathname?.startsWith("/admin")) {
@@ -18,7 +18,7 @@ export default function NavBar() {
       <div className="max-w-6xl mx-auto flex items-center justify-between">
         <Link href="/dashboard">
           <h1 className="text-2xl font-bold cursor-pointer">
-            <span className="text-yellow-400">Giravent</span>
+            <span className="text-yellow-400">GiraMatch</span>
           </h1>
         </Link>
         <nav className="flex items-center gap-4">
@@ -42,7 +42,7 @@ export default function NavBar() {
             </div>
           ) : (
             <div className="flex items-center gap-3 ml-4">
-              <span className="text-sm text-gray-300">{userId}</span>
+              <span className="text-sm text-gray-300">{displayName || userId}</span>
               <button onClick={logout} className="bg-red-600 text-white px-4 py-2 rounded-lg font-bold hover:bg-red-700 transition text-sm">
                 ログアウト
               </button>

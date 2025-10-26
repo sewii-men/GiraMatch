@@ -15,7 +15,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Giravent - ギラヴァンツ北九州ファン創出アプリ",
+  title: "GiraMatch - ギラヴァンツ北九州ファン創出アプリ",
   description: "サッカー観戦とマッチングを掛け合わせた若者向けファン創出アプリ",
 };
 

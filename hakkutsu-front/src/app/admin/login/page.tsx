@@ -23,7 +23,7 @@ export default function AdminLoginPage() {
       const loginRes = await fetch(`${base}/auth/login`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ userId, password }),
+        body: JSON.stringify({ email: userId, password }),
       });
 
       const loginData = await loginRes.json();
@@ -61,7 +61,7 @@ export default function AdminLoginPage() {
       <div className="w-full max-w-md bg-gray-800 rounded-xl shadow-lg border-2 border-yellow-400 p-8">
         <div className="text-center mb-8">
           <h1 className="text-3xl font-bold text-yellow-400 mb-2">
-            Giravent 管理画面
+            GiraMatch 管理画面
           </h1>
           <p className="text-gray-400 text-sm">管理者ログイン</p>
         </div>
@@ -102,11 +102,10 @@ export default function AdminLoginPage() {
           <button
             type="submit"
             disabled={loading}
-            className={`w-full py-3 rounded-lg font-bold text-black transition ${
-              loading
+            className={`w-full py-3 rounded-lg font-bold text-black transition ${loading
                 ? "bg-gray-500 cursor-not-allowed"
                 : "bg-yellow-400 hover:bg-yellow-500"
-            }`}
+              }`}
           >
             {loading ? "ログイン中..." : "ログイン"}
           </button>

@@ -7,6 +7,14 @@ import { apiBase } from "@/lib/apiBase";
 interface User {
   userId: string;
   name: string;
+  nickname?: string;
+  email?: string;
+  birthDate?: string;
+  gender?: string;
+  icon?: string;
+  style?: string;
+  seat?: string;
+  trustScore?: number;
   createdAt: string;
   isAdmin?: boolean;
   suspended?: boolean;
@@ -94,7 +102,16 @@ export default function UserDetail() {
           "Content-Type": "application/json",
           ...(token ? { Authorization: `Bearer ${token}` } : {}),
         },
-        body: JSON.stringify({ name: user.name }),
+        body: JSON.stringify({
+          name: user.name,
+          nickname: user.nickname,
+          birthDate: user.birthDate,
+          gender: user.gender,
+          icon: user.icon,
+          style: user.style,
+          seat: user.seat,
+          trustScore: user.trustScore,
+        }),
       });
 
       if (!res.ok) {
@@ -103,6 +120,7 @@ export default function UserDetail() {
       }
 
       alert("更新しました");
+      fetchUser();
     } catch (err) {
       console.error(err);
       setError(err instanceof Error ? err.message : "エラーが発生しました");
@@ -255,6 +273,118 @@ export default function UserDetail() {
             />
           </div>
 
+          {/* ニックネーム */}
+          <div>
+            <label className="block text-white font-medium mb-2">
+              ニックネーム
+            </label>
+            <input
+              type="text"
+              value={user.nickname || ""}
+              onChange={(e) => setUser({ ...user, nickname: e.target.value })}
+              className="w-full px-4 py-2 bg-black text-white border-2 border-gray-700 rounded focus:border-yellow-400 focus:outline-none"
+            />
+          </div>
+
+          {/* メールアドレス */}
+          <div>
+            <label className="block text-white font-medium mb-2">メールアドレス</label>
+            <input
+              type="text"
+              value={user.email || "-"}
+              disabled
+              className="w-full px-4 py-2 bg-gray-800 text-gray-400 border-2 border-gray-700 rounded cursor-not-allowed"
+            />
+          </div>
+
+          {/* 誕生日 */}
+          <div>
+            <label className="block text-white font-medium mb-2">
+              誕生日
+            </label>
+            <input
+              type="date"
+              value={user.birthDate || ""}
+              onChange={(e) => setUser({ ...user, birthDate: e.target.value })}
+              className="w-full px-4 py-2 bg-black text-white border-2 border-gray-700 rounded focus:border-yellow-400 focus:outline-none"
+            />
+          </div>
+
+          {/* 性別 */}
+          <div>
+            <label className="block text-white font-medium mb-2">
+              性別
+            </label>
+            <select
+              value={user.gender || ""}
+              onChange={(e) => setUser({ ...user, gender: e.target.value })}
+              className="w-full px-4 py-2 bg-black text-white border-2 border-gray-700 rounded focus:border-yellow-400 focus:outline-none"
+            >
+              <option value="">未設定</option>
+              <option value="male">男性</option>
+              <option value="female">女性</option>
+              <option value="other">その他</option>
+            </select>
+          </div>
+
+          {/* アイコン */}
+          <div>
+            <label className="block text-white font-medium mb-2">
+              アイコン
+            </label>
+            <input
+              type="text"
+              value={user.icon || ""}
+              onChange={(e) => setUser({ ...user, icon: e.target.value })}
+              placeholder="例: 👤"
+              className="w-full px-4 py-2 bg-black text-white border-2 border-gray-700 rounded focus:border-yellow-400 focus:outline-none"
+            />
+          </div>
+
+          {/* 応援スタイル */}
+          <div>
+            <label className="block text-white font-medium mb-2">
+              応援スタイル
+            </label>
+            <input
+              type="text"
+              value={user.style || ""}
+              onChange={(e) => setUser({ ...user, style: e.target.value })}
+              placeholder="例: 声出し応援OK"
+              className="w-full px-4 py-2 bg-black text-white border-2 border-gray-700 rounded focus:border-yellow-400 focus:outline-none"
+            />
+          </div>
+
+          {/* 席の好み */}
+          <div>
+            <label className="block text-white font-medium mb-2">
+              席の好み
+            </label>
+            <input
+              type="text"
+              value={user.seat || ""}
+              onChange={(e) => setUser({ ...user, seat: e.target.value })}
+              placeholder="例: ゴール裏希望"
+              className="w-full px-4 py-2 bg-black text-white border-2 border-gray-700 rounded focus:border-yellow-400 focus:outline-none"
+            />
+          </div>
+
+          {/* 信頼スコア */}
+          <div>
+            <label className="block text-white font-medium mb-2">
+              信頼スコア
+            </label>
+            <input
+              type="number"
+              step="0.1"
+              min="0"
+              max="5"
+              value={user.trustScore || 0}
+              onChange={(e) => setUser({ ...user, trustScore: parseFloat(e.target.value) })}
+              className="w-full px-4 py-2 bg-black text-white border-2 border-gray-700 rounded focus:border-yellow-400 focus:outline-none"
+            />
+          </div>
+
           {/* 登録日 */}
           <div>
             <label className="block text-white font-medium mb-2">登録日</label>
@@ -312,8 +442,8 @@ export default function UserDetail() {
                 {user.deleted
                   ? "削除済み"
                   : user.suspended
-                  ? "停止中"
-                  : "有効"}
+                    ? "停止中"
+                    : "有効"}
               </p>
             </div>
           </div>

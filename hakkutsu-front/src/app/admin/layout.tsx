@@ -64,7 +64,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
           <div className="flex items-center justify-between">
             <Link href="/admin" className="hover:opacity-80 transition-opacity">
               <h1 className="text-2xl font-bold text-yellow-400">
-                Giravent 管理画面
+                GiraMatch 管理画面
               </h1>
             </Link>
             <div className="flex items-center gap-4">
