@@ -2,13 +2,9 @@ name: CI/CD Pipeline
 
 on:
   push:
-    branches:
-      - dev
-      - main
+    branches: [dev, main]
   pull_request:
-    branches:
-      - dev
-      - main
+    branches: [dev, main]
 
 jobs:
   build-and-deploy:
@@ -23,14 +19,30 @@ jobs:
         with:
           node-version: 20
 
-      - name: Install dependencies
-        run: npm ci
+      # ---- Install deps (API) ----
+      - name: Install dependencies (API)
+        working-directory: hakkutsu-api
+        run: npm install
 
-      - name: Lint & Test (optional)
+      # ---- Install deps (Front) ----
+      - name: Install dependencies (Front)
+        working-directory: hakkutsu-front
+        run: npm install
+
+      # ---- Lint & Test (API) ----
+      - name: Lint & Test (API)
+        working-directory: hakkutsu-api
         run: |
           npm run lint --if-present
           npm test --if-present
 
-      # Deployment is handled in dedicated workflows:
+      # ---- Lint & Test (Front) ----
+      - name: Lint & Test (Front)
+        working-directory: hakkutsu-front
+        run: |
+          npm run lint --if-present
+          npm test --if-present
+
+      # Deploymentは別ワークフローが担当
       # - .github/workflows/deploy-api.yml (AWS SAM)
       # - .github/workflows/deploy-front.yml (Vercel)
