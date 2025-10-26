@@ -752,7 +752,7 @@ interface StatusBadgeProps {
 # .env.local (フロントエンド)
 NEXT_PUBLIC_API_URL=http://localhost:4000
 
-# docker-compose.yml / serverless.yml (バックエンド)
+# docker-compose.yml / template.yaml (AWS SAM, バックエンド)
 REPORTS_TABLE=reports-table-dev
 MATCHINGS_TABLE=matchings-table-dev
 ```
