@@ -57,7 +57,7 @@ async function ensureUsersTable() {
   }
 }
 
-async function ensureTable({ tableName, keySchema, attributeDefinitions }) {
+async function ensureTable({ tableName, keySchema, attributeDefinitions, globalSecondaryIndexes }) {
   const client = new DynamoDBClient({
     endpoint: process.env.DYNAMODB_LOCAL_URL,
     region: process.env.AWS_REGION || "ap-northeast-1",
@@ -77,6 +77,7 @@ async function ensureTable({ tableName, keySchema, attributeDefinitions }) {
           TableName: tableName,
           AttributeDefinitions: attributeDefinitions,
           KeySchema: keySchema,
+          GlobalSecondaryIndexes: globalSecondaryIndexes,
           BillingMode: "PAY_PER_REQUEST",
         })
       );
@@ -215,13 +216,39 @@ async function ensureLocalAdminOnly() {
 
     await ensureTable({
       tableName: RECRUITMENTS_TABLE,
-      attributeDefinitions: [{ AttributeName: "id", AttributeType: "S" }],
+      attributeDefinitions: [
+        { AttributeName: "id", AttributeType: "S" },
+        { AttributeName: "recruiterId", AttributeType: "S" },
+      ],
       keySchema: [{ AttributeName: "id", KeyType: "HASH" }],
+      globalSecondaryIndexes: [
+        {
+          IndexName: "RecruiterIdIndex",
+          KeySchema: [{ AttributeName: "recruiterId", KeyType: "HASH" }],
+          Projection: { ProjectionType: "ALL" },
+        },
+      ],
     });
     await ensureTable({
       tableName: REQUESTS_TABLE,
-      attributeDefinitions: [{ AttributeName: "id", AttributeType: "S" }],
+      attributeDefinitions: [
+        { AttributeName: "id", AttributeType: "S" },
+        { AttributeName: "recruiterId", AttributeType: "S" },
+        { AttributeName: "requesterId", AttributeType: "S" },
+      ],
       keySchema: [{ AttributeName: "id", KeyType: "HASH" }],
+      globalSecondaryIndexes: [
+        {
+          IndexName: "RecruiterIdIndex",
+          KeySchema: [{ AttributeName: "recruiterId", KeyType: "HASH" }],
+          Projection: { ProjectionType: "ALL" },
+        },
+        {
+          IndexName: "RequesterIdIndex",
+          KeySchema: [{ AttributeName: "requesterId", KeyType: "HASH" }],
+          Projection: { ProjectionType: "ALL" },
+        },
+      ],
     });
   }
   app.listen(port, () => {

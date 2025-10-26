@@ -153,11 +153,6 @@ export default function RecruitmentsPage() {
     }
   };
 
-  const applyFiltersAndSort = () => {
-  useEffect(() => {
-    fetchRecruitments();
-  }, [fetchRecruitments]);
-
   const applyFiltersAndSort = useCallback(() => {
     let filtered = [...recruitments];
 
