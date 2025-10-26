@@ -553,21 +553,34 @@ app.post("/matching/recruit", requireAuth, async (req, res) => {
 // 募集一覧を取得
 app.get("/matching/recruitments", async (req, res) => {
   try {
+    console.log("📋 /matching/recruitments endpoint called");
+    console.log("📋 RECRUITMENTS_TABLE:", RECRUITMENTS_TABLE);
+    console.log("📋 REQUESTS_TABLE:", REQUESTS_TABLE);
+
+    if (!RECRUITMENTS_TABLE) {
+      console.error("❌ RECRUITMENTS_TABLE is not defined");
+      return res.status(500).json({ error: "RECRUITMENTS_TABLE is not configured" });
+    }
+
     const currentUserId = getUserIdFromRequest(req);
     let requestedRecruitmentIds = new Set();
 
-    if (currentUserId) {
-      const requestsData = await docClient.send(new ScanCommand({
-        TableName: REQUESTS_TABLE
-      }));
+    if (currentUserId && REQUESTS_TABLE) {
+      try {
+        const requestsData = await docClient.send(new ScanCommand({
+          TableName: REQUESTS_TABLE
+        }));
 
-      requestedRecruitmentIds = new Set(
-        (requestsData.Items || [])
-          .filter((req) => req.requesterId === currentUserId && (req.isRequested ?? true))
-          .map((req) => req.recruitmentId)
-      );
+        requestedRecruitmentIds = new Set(
+          (requestsData.Items || [])
+            .filter((req) => req.requesterId === currentUserId && (req.isRequested ?? true))
+            .map((req) => req.recruitmentId)
+        );
 
-      console.log("✅ 認証済みユーザーのリクエスト数:", requestedRecruitmentIds.size);
+        console.log("✅ 認証済みユーザーのリクエスト数:", requestedRecruitmentIds.size);
+      } catch (requestError) {
+        console.error("⚠️ Error fetching requests (non-fatal):", requestError);
+      }
     }
 
     const data = await docClient.send(new ScanCommand({
@@ -612,8 +625,13 @@ app.get("/matching/recruitments", async (req, res) => {
 
     res.json(activeRecruitments);
   } catch (error) {
-    console.error(error);
-    res.status(500).json({ error: "Could not fetch recruitments" });
+    console.error("❌ Error in /matching/recruitments:", error);
+    console.error("❌ Error stack:", error.stack);
+    res.status(500).json({
+      error: "Could not fetch recruitments",
+      details: error.message,
+      tableName: RECRUITMENTS_TABLE
+    });
   }
 });
 

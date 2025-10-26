@@ -221,6 +221,8 @@ Resources:
           AttributeType: S
         - AttributeName: recruiterId
           AttributeType: S
+        - AttributeName: requesterId
+          AttributeType: S
       KeySchema:
         - AttributeName: id
           KeyType: HASH
@@ -228,6 +230,12 @@ Resources:
         - IndexName: RecruiterIdIndex
           KeySchema:
             - AttributeName: recruiterId
+              KeyType: HASH
+          Projection:
+            ProjectionType: ALL
+        - IndexName: RequesterIdIndex
+          KeySchema:
+            - AttributeName: requesterId
               KeyType: HASH
           Projection:
             ProjectionType: ALL

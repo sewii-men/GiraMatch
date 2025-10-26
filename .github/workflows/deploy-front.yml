@@ -68,10 +68,12 @@ jobs:
 
           # Probe a known public endpoint that should be 200
           RECRUIT_STATUS=$(curl -sS -H 'Accept: application/json' -o recruit_resp.json -w "%{http_code}" "$API_URL/matching/recruitments") || true
-          head -c 200 recruit_resp.json || true
+          echo "Response body:"
+          cat recruit_resp.json || true
           echo
           if [ "$RECRUIT_STATUS" != "200" ]; then
             echo "::error::/matching/recruitments unhealthy. HTTP $RECRUIT_STATUS"
+            echo "::error::Response: $(cat recruit_resp.json 2>/dev/null || echo 'no response body')"
             exit 1
           fi
 
