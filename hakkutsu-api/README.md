@@ -37,6 +37,17 @@ functions:
 
 Note: In the current template, the API is public. For production, consider adding an authorizer to API Gateway and secrets management for JWT.
 
+### Admin login (bootstrap)
+
+This API supports a bootstrap admin login via environment variables. Set these parameters at deploy time:
+
+- `AdminEmail` (maps to `ADMIN_EMAIL`) — default: `admin@test.com`
+- `AdminPassword` (maps to `ADMIN_PASSWORD`, NoEcho) — default: `secret0101`
+
+On first successful login with these credentials, the API will upsert a user with `isAdmin: true` and store a password hash in DynamoDB. If you later rotate `AdminPassword`, the next login will re-sync the stored hash.
+
+For production, use strong values and manage secrets securely (e.g., AWS Secrets Manager + SAM parameter overrides).
+
 ### Invocation
 
 After successful deployment, you can create a new user by calling the corresponding endpoint:
@@ -72,3 +83,5 @@ docker compose up --build
 ```
 
 It runs `node local.js` inside the container and exposes `http://localhost:4000`.
+
+The local Docker service passes `ADMIN_EMAIL` and `ADMIN_PASSWORD` by default (see root `docker-compose.yml`). Update your `.env` to override if needed.

@@ -15,6 +15,15 @@ Parameters:
     Type: String
     Default: change-me-in-prod
     Description: JWT secret for signing tokens
+  AdminEmail:
+    Type: String
+    Default: admin@test.com
+    Description: Admin login email for bootstrap login
+  AdminPassword:
+    Type: String
+    NoEcho: true
+    Default: secret0101
+    Description: Admin login password for bootstrap login (rotate in prod)
 
 Globals:
   Function:
@@ -68,6 +77,8 @@ Resources:
           JWT_SECRET: !Ref JwtSecret
           # ALLOWED_ORIGINS can be passed as a CSV env var if needed
           ALLOWED_ORIGINS: !Join [',', !Ref AllowedOrigins]
+          ADMIN_EMAIL: !Ref AdminEmail
+          ADMIN_PASSWORD: !Ref AdminPassword
       Policies:
         - DynamoDBCrudPolicy:
             TableName: !Ref UsersTable
