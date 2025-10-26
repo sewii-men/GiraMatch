@@ -24,7 +24,7 @@ interface RestaurantShareCount {
 
 const MOCK_RESTAURANTS: Restaurant[] = [
   {
-    id: "rest_001",
+    restaurantId: "rest_001",
     name: "居酒屋 ギラ",
     address: "福岡県北九州市小倉北区浅野3-8-1",
     imageUrl: "https://placehold.co/300x200/yellow/black?text=Izakaya+Gira",
@@ -35,7 +35,7 @@ const MOCK_RESTAURANTS: Restaurant[] = [
     distance: 250,
   },
   {
-    id: "rest_002",
+    restaurantId: "rest_002",
     name: "焼き鳥 北九",
     address: "福岡県北九州市小倉北区浅野2-14-2",
     imageUrl: "https://placehold.co/300x200/red/white?text=Yakitori+Hokukyu",
@@ -46,7 +46,7 @@ const MOCK_RESTAURANTS: Restaurant[] = [
     distance: 300,
   },
   {
-    id: "rest_003",
+    restaurantId: "rest_003",
     name: "スタジアムカフェ",
     address: "福岡県北九州市小倉北区浅野3-9-30",
     imageUrl: "https://placehold.co/300x200/blue/white?text=Stadium+Cafe",
@@ -57,7 +57,7 @@ const MOCK_RESTAURANTS: Restaurant[] = [
     distance: 180,
   },
   {
-    id: "rest_004",
+    restaurantId: "rest_004",
     name: "ラーメン ギラ軒",
     address: "福岡県北九州市小倉北区浅野2-10-1",
     imageUrl: "https://placehold.co/300x200/orange/white?text=Ramen+Giraken",
@@ -68,7 +68,7 @@ const MOCK_RESTAURANTS: Restaurant[] = [
     distance: 350,
   },
   {
-    id: "rest_005",
+    restaurantId: "rest_005",
     name: "バル デ ギラヴァンツ",
     address: "福岡県北九州市小倉北区浅野3-7-1",
     imageUrl: "https://placehold.co/300x200/green/white?text=Bar+de+Giravanz",
@@ -201,16 +201,16 @@ export async function fetchMockRestaurantShares(): Promise<RestaurantShareCount[
 
   mockMessages.forEach((message) => {
     if (!message.restaurant) return;
-    const existing = map.get(message.restaurant.id);
+    const existing = map.get(message.restaurant.restaurantId);
     if (!existing) {
-      map.set(message.restaurant.id, {
-        restaurantId: message.restaurant.id,
+      map.set(message.restaurant.restaurantId, {
+        restaurantId: message.restaurant.restaurantId,
         count: 1,
         lastSharedAt: message.timestamp,
       });
       return;
     }
-    map.set(message.restaurant.id, {
+    map.set(message.restaurant.restaurantId, {
       ...existing,
       count: existing.count + 1,
       lastSharedAt: message.timestamp,
