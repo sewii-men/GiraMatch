@@ -12,9 +12,9 @@ import { PostMatchChatProvider, usePostMatchChat } from "@/lib/postMatchChatCont
 import { Restaurant } from "@/types/postMatchChat";
 import { requestNotificationPermission, showChatNotification } from "@/lib/notifications";
 import {
-  fetchMockPostMatchChat,
-  sendMockChatMessage,
-} from "@/lib/mockApi/postMatchChat";
+  fetchPostMatchChat,
+  sendChatMessage,
+} from "@/lib/api/postMatchChat";
 
 const MAP_FALLBACK_CENTER = {
   lat: 33.8834,
@@ -117,15 +117,13 @@ function PostMatchChatPageContent({
     setIsSending(true);
     setSendError(null);
     try {
-      const newMessage = await sendMockChatMessage({
+      const newMessage = await sendChatMessage({
         chatId,
-        userId: userId || "current_user",
-        nickname: "あなた",
-        icon: "😊",
         text,
         restaurant: restaurant || attachedRestaurant || undefined,
       });
       addMessage(newMessage);
+      setAttachedRestaurant(null); // メッセージ送信後に添付レストランをクリア
     } catch (error) {
       console.error(error);
       setSendError("メッセージの送信に失敗しました。時間を置いて再度お試しください。");
@@ -367,7 +365,7 @@ function PostMatchChatInitializer({ matchId, userId }: { matchId: string; userId
     setChatLoading(true);
     (async () => {
       try {
-        const chat = await fetchMockPostMatchChat(matchId, userId);
+        const chat = await fetchPostMatchChat(matchId);
         console.log("[PostMatchChat] fetched chat", { chat });
         if (canceled) return;
         initializeChat(chat);
@@ -387,7 +385,7 @@ function PostMatchChatInitializer({ matchId, userId }: { matchId: string; userId
     return () => {
       canceled = true;
     };
-  }, [matchId, userId, initializeChat, chatReloadKey]);
+  }, [matchId, initializeChat, chatReloadKey]);
 
   useEffect(() => {
     let canceled = false;

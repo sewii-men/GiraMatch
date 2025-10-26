@@ -75,6 +75,10 @@ const REPORTS_TABLE = process.env.REPORTS_TABLE || "reports-table-dev";
 const RECRUITMENTS_TABLE = process.env.RECRUITMENTS_TABLE || "recruitments-table-dev";
 const REQUESTS_TABLE = process.env.REQUESTS_TABLE || "requests-table-dev";
 const RESTAURANTS_TABLE = process.env.RESTAURANTS_TABLE || "restaurants-table-dev";
+const POST_MATCH_CHATS_TABLE = process.env.POST_MATCH_CHATS_TABLE || "post-match-chats-table-dev";
+const POST_MATCH_CHAT_MESSAGES_TABLE = process.env.POST_MATCH_CHAT_MESSAGES_TABLE || "post-match-chat-messages-table-dev";
+const RESTAURANT_SHARES_TABLE = process.env.RESTAURANT_SHARES_TABLE || "restaurant-shares-table-dev";
+const CHAT_PARTICIPANTS_TABLE = process.env.CHAT_PARTICIPANTS_TABLE || "chat-participants-table-dev";
 const isLocal = !!process.env.DYNAMODB_LOCAL_URL;
 
 async function ensureUsersTable() {
@@ -203,6 +207,85 @@ async function seedRestaurants() {
     console.error(`Error seeding ${RESTAURANTS_TABLE}:`, error);
   }
 }
+
+async function seedPostMatchChatData() {
+  if (!isLocal) return;
+
+  const client = new DynamoDBClient({
+    endpoint: process.env.DYNAMODB_LOCAL_URL,
+    region: process.env.AWS_REGION || "ap-northeast-1",
+    credentials: {
+      accessKeyId: process.env.AWS_ACCESS_KEY_ID || "dummy",
+      secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY || "dummy",
+    },
+  });
+  const doc = DynamoDBDocumentClient.from(client);
+
+  try {
+    // テスト用の試合データ
+    const testMatchId = "match_test_001";
+    const testChatId = `chat_${testMatchId}`;
+
+    // 試合データを追加
+    const { Count: matchCount } = await doc.send(new ScanCommand({ TableName: MATCHES_TABLE, Select: "COUNT" }));
+    if (matchCount === 0) {
+      console.log(`🌱 Seeding test match data...`);
+      await doc.send(new PutCommand({
+        TableName: MATCHES_TABLE,
+        Item: {
+          matchId: testMatchId,
+          opponent: "vs 鹿児島ユナイテッドFC",
+          date: new Date().toISOString().split("T")[0],
+          venue: "ミクニワールドスタジアム北九州",
+          venueId: "stadium_001",
+          latitude: 33.8834,
+          longitude: 130.8751,
+        },
+      }));
+      console.log(`✅ Seeded test match`);
+    }
+
+    // チャットデータを追加
+    const { Count: chatCount } = await doc.send(new ScanCommand({ TableName: POST_MATCH_CHATS_TABLE, Select: "COUNT" }));
+    if (chatCount === 0) {
+      console.log(`🌱 Seeding test post-match chat...`);
+      const now = new Date();
+      const endOfDay = new Date(now);
+      endOfDay.setHours(23, 59, 59, 999);
+
+      await doc.send(new PutCommand({
+        TableName: POST_MATCH_CHATS_TABLE,
+        Item: {
+          chat_id: testChatId,
+          match_id: testMatchId,
+          opponent: "vs 鹿児島ユナイテッドFC",
+          date: new Date().toISOString().split("T")[0],
+          start_time: new Date(Date.now() - 60 * 60 * 1000).toISOString(),
+          end_time: endOfDay.toISOString(),
+          is_closed: false,
+          participant_count: 1,
+        },
+      }));
+
+      // テストユーザーを参加者に追加
+      await doc.send(new PutCommand({
+        TableName: CHAT_PARTICIPANTS_TABLE,
+        Item: {
+          chat_id: testChatId,
+          user_id: "test_user_001",
+          joined_at: now.toISOString(),
+          last_read_at: null,
+        },
+      }));
+
+      console.log(`✅ Seeded test post-match chat`);
+    }
+
+  } catch (error) {
+    console.error("Error seeding post-match chat data:", error);
+  }
+}
+
 async function ensureLocalAdminOnly() {
   const client = new DynamoDBClient({
     endpoint: process.env.DYNAMODB_LOCAL_URL,
@@ -376,7 +459,80 @@ async function ensureLocalAdminOnly() {
       keySchema: [{ AttributeName: "restaurant_id", KeyType: "HASH" }],
     });
 
+    // ギラ飲みチャット関連テーブル
+    await ensureTable({
+      tableName: POST_MATCH_CHATS_TABLE,
+      attributeDefinitions: [
+        { AttributeName: "chat_id", AttributeType: "S" },
+        { AttributeName: "match_id", AttributeType: "S" },
+      ],
+      keySchema: [{ AttributeName: "chat_id", KeyType: "HASH" }],
+      globalSecondaryIndexes: [
+        {
+          IndexName: "MatchIdIndex",
+          KeySchema: [{ AttributeName: "match_id", KeyType: "HASH" }],
+          Projection: { ProjectionType: "ALL" },
+        },
+      ],
+    });
+
+    await ensureTable({
+      tableName: POST_MATCH_CHAT_MESSAGES_TABLE,
+      attributeDefinitions: [
+        { AttributeName: "message_id", AttributeType: "S" },
+        { AttributeName: "chat_id", AttributeType: "S" },
+        { AttributeName: "created_at", AttributeType: "S" },
+      ],
+      keySchema: [
+        { AttributeName: "chat_id", KeyType: "HASH" },
+        { AttributeName: "message_id", KeyType: "RANGE" },
+      ],
+      globalSecondaryIndexes: [
+        {
+          IndexName: "ChatIdCreatedAtIndex",
+          KeySchema: [
+            { AttributeName: "chat_id", KeyType: "HASH" },
+            { AttributeName: "created_at", KeyType: "RANGE" },
+          ],
+          Projection: { ProjectionType: "ALL" },
+        },
+      ],
+    });
+
+    await ensureTable({
+      tableName: CHAT_PARTICIPANTS_TABLE,
+      attributeDefinitions: [
+        { AttributeName: "chat_id", AttributeType: "S" },
+        { AttributeName: "user_id", AttributeType: "S" },
+      ],
+      keySchema: [
+        { AttributeName: "chat_id", KeyType: "HASH" },
+        { AttributeName: "user_id", KeyType: "RANGE" },
+      ],
+    });
+
+    await ensureTable({
+      tableName: RESTAURANT_SHARES_TABLE,
+      attributeDefinitions: [
+        { AttributeName: "share_id", AttributeType: "S" },
+        { AttributeName: "chat_id", AttributeType: "S" },
+        { AttributeName: "restaurant_id", AttributeType: "S" },
+      ],
+      keySchema: [{ AttributeName: "share_id", KeyType: "HASH" }],
+      globalSecondaryIndexes: [
+        {
+          IndexName: "ChatIdRestaurantIdIndex",
+          KeySchema: [
+            { AttributeName: "chat_id", KeyType: "HASH" },
+            { AttributeName: "restaurant_id", KeyType: "RANGE" },
+          ],
+          Projection: { ProjectionType: "ALL" },
+        },
+      ],
+    });
+
     await seedRestaurants();
+    await seedPostMatchChatData();
   }
   app.listen(port, () => {
     console.log(`🚀 Local API running at http://localhost:${port}`);
