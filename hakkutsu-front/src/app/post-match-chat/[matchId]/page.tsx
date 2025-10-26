@@ -13,7 +13,6 @@ import { Restaurant } from "@/types/postMatchChat";
 import { requestNotificationPermission, showChatNotification } from "@/lib/notifications";
 import {
   fetchMockPostMatchChat,
-  fetchMockRestaurants,
   sendMockChatMessage,
 } from "@/lib/mockApi/postMatchChat";
 
@@ -254,7 +253,7 @@ function PostMatchChatPageContent({
               {!restaurantsLoading && !restaurantsError &&
                 restaurants.map((restaurant) => (
                   <RestaurantCard
-                    key={restaurant.id}
+                    key={restaurant.restaurantId}
                     restaurant={restaurant}
                     onAttachToMessage={handleAttachRestaurant}
                   />
@@ -393,15 +392,50 @@ function PostMatchChatInitializer({ matchId, userId }: { matchId: string; userId
   useEffect(() => {
     let canceled = false;
     setRestaurantsLoading(true);
+    const base = process.env.NEXT_PUBLIC_API_URL;
+
     (async () => {
       try {
-        const list = await fetchMockRestaurants(matchId, { limit: 20 });
-        console.log("[PostMatchChat] fetched restaurants", { list });
+        // First, fetch the initial list of restaurants
+        const initialRes = await fetch(`${base}/restaurants`);
+        if (!initialRes.ok) {
+          throw new Error("店舗リストの取得に失敗しました。");
+        }
+        const initialList = await initialRes.json();
+
         if (canceled) return;
-        setRestaurants(list);
+
+        // Now, enrich the list with details from Google Places API via our backend
+        const enrichedRes = await fetch(`${base}/restaurants/details`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ restaurants: initialList }),
+        });
+
+        if (!enrichedRes.ok) {
+          // If enrichment fails, still show the basic list
+          console.warn("Google Placesでの店舗情報の詳細化に失敗しました。");
+          setRestaurants(initialList);
+          setRestaurantsError(null);
+          return;
+        }
+
+        const enrichedList = await enrichedRes.json();
+        if (canceled) return;
+
+        setRestaurants(enrichedList);
         setRestaurantsError(null);
+
       } catch (error) {
-        console.error(error);
+        console.error("店舗情報の取得中に詳細なエラーが発生しました:", error);
+        if (error instanceof Response) {
+          console.error("レスポンスステータス:", error.status);
+          error.json().then(body => {
+            console.error("エラーレスポンスBody:", body);
+          });
+        }
         if (!canceled) {
           setRestaurantsError("店舗情報の取得に失敗しました。再読み込みしてください。");
         }

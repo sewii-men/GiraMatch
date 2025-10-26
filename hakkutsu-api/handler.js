@@ -639,31 +639,20 @@ app.get("/matching/recruitments", async (req, res) => {
 app.get("/matching/my-recruitments", requireAuth, async (req, res) => {
   try {
     const userId = req.user.userId;
-    const recruitmentsData = await docClient.send(new QueryCommand({
-      TableName: RECRUITMENTS_TABLE,
-      IndexName: "RecruiterIdIndex",
-      KeyConditionExpression: "recruiterId = :userId",
-      ExpressionAttributeValues: {
-        ":userId": userId,
-      },
-    }));
-
-    const requestsData = await docClient.send(new QueryCommand({
-      TableName: REQUESTS_TABLE,
-      IndexName: "RecruiterIdIndex",
-      KeyConditionExpression: "recruiterId = :userId",
-      ExpressionAttributeValues: {
-        ":userId": userId,
-      },
-    }));
+    const [recruitmentsData, requestsData] = await Promise.all([
+      docClient.send(new ScanCommand({ TableName: RECRUITMENTS_TABLE })),
+      docClient.send(new ScanCommand({ TableName: REQUESTS_TABLE })),
+    ]);
 
     const requestCounts = (requestsData.Items || [])
+      .filter((req) => req.recruiterId === userId)
       .reduce((acc, req) => {
         acc[req.recruitmentId] = (acc[req.recruitmentId] || 0) + 1;
         return acc;
       }, {});
 
     const myRecruitments = (recruitmentsData.Items || [])
+      .filter(r => r.recruiterId === userId)
       .map(r => ({
         id: r.id,
         matchId: r.matchId,
@@ -1128,24 +1117,28 @@ app.post("/matching/request", requireAuth, async (req, res) => {
       return res.status(404).json({ error: "Recruitment not found" });
     }
 
-    // Check if user is the recruiter
     if (recruitment.recruiterId === userId) {
-      return res.status(400).json({ error: "You cannot request to join your own recruitment" });
+      return res.status(400).json({ error: "Cannot request your own recruitment" });
     }
-
-    // Check for existing request
-    const existingRequest = await findActiveRequestByRecruitment(recruitmentId, userId);
-    if (existingRequest) {
-      return res.status(409).json({ error: "Request already sent" });
-    }
-
-    const userData = await docClient.send(new GetCommand({
+    
+    const { Item: requesterProfile } = await docClient.send(new GetCommand({
       TableName: USERS_TABLE,
-      Key: { userId: String(userId) }
+      Key: { userId }
     }));
 
-    if (!userData.Item) {
-      return res.status(404).json({ error: "User not found" });
+    if (!requesterProfile) {
+      return res.status(404).json({ error: "Requester profile not found" });
+    }
+
+    const existingRequests = await docClient.send(new ScanCommand({
+      TableName: REQUESTS_TABLE
+    }));
+    const alreadyRequested = (existingRequests.Items || []).some(
+      (req) => req.recruitmentId === recruitmentId && req.requesterId === userId && (req.isRequested ?? true)
+    );
+
+    if (alreadyRequested) {
+      return res.status(409).json({ error: "Request already sent for this recruitment" });
     }
 
     const requestId = `request-${Date.now()}-${userId}`;
@@ -1154,17 +1147,24 @@ app.post("/matching/request", requireAuth, async (req, res) => {
       recruitmentId,
       requesterId: userId,
       recruiterId: recruitment.recruiterId,
+      matchId: recruitment.matchId,
       status: "pending",
       createdAt: new Date().toISOString(),
       isRequested: true,
-      // Add requester details for denormalization
-      requesterNickname: userData.Item.nickname || userData.Item.name,
-      requesterGender: userData.Item.gender,
-      requesterIcon: userData.Item.icon,
-      requesterTrustScore: userData.Item.trustScore || 0,
-      requesterBirthDate: userData.Item.birthDate,
-      requesterStyle: userData.Item.style,
-      requesterSeat: userData.Item.seat,
+      requesterNickname: requesterProfile.nickname || requesterProfile.name || userId,
+      requesterGender: requesterProfile.gender || null,
+      requesterIcon: requesterProfile.icon || null,
+      requesterTrustScore: requesterProfile.trustScore ?? null,
+      requesterBirthDate: requesterProfile.birthDate || null,
+      requesterStyle: requesterProfile.style || null,
+      requesterSeat: requesterProfile.seat || null,
+      recruiterNickname: recruitment.recruiterNickname || null,
+      recruiterGender: recruitment.recruiterGender || null,
+      recruiterIcon: recruitment.recruiterIcon || null,
+      recruiterTrustScore: recruitment.recruiterTrustScore ?? null,
+      recruiterBirthDate: recruitment.recruiterBirthDate || null,
+      recruiterStyle: recruitment.recruiterStyle || null,
+      recruiterSeat: recruitment.recruiterSeat || null,
     };
 
     await docClient.send(new PutCommand({
@@ -1173,12 +1173,1432 @@ app.post("/matching/request", requireAuth, async (req, res) => {
     }));
 
     res.json({ success: true, request });
-
   } catch (error) {
-    console.error("Error creating request:", error);
-    res.status(500).json({ error: "Could not create request" });
+    console.error(error);
+    res.status(500).json({ error: "Could not send request" });
   }
 });
 
-module.exports.handler = serverless(app);
-module.exports.app = app;
+// 送信済みリクエストを取り消し
+app.delete("/matching/requests/:requestId", requireAuth, async (req, res) => {
+  try {
+    const { requestId } = req.params;
+    const userId = req.user.userId;
+
+    const requestItem = await findRequestById(requestId);
+    if (!requestItem) {
+      return res.status(404).json({ error: "Request not found" });
+    }
+
+    if (requestItem.requesterId !== userId) {
+      return res.status(403).json({ error: "Forbidden" });
+    }
+
+    await cancelRequestRecord(requestItem.id || requestId);
+
+    res.json({ success: true });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: "Could not cancel request" });
+  }
+});
+
+// 送信済みリクエストを募集IDで取り消し（後方互換用）
+app.delete("/matching/request", requireAuth, async (req, res) => {
+  try {
+    const { recruitmentId } = req.body || {};
+    const userId = req.user.userId;
+    if (!recruitmentId) {
+      return res.status(400).json({ error: "recruitmentId is required" });
+    }
+
+    const requestItem = await findActiveRequestByRecruitment(recruitmentId, userId);
+    if (!requestItem) {
+      // 既に削除されている、または元々存在しない場合は成功として扱う
+      return res.json({ success: true, message: "Request not found or already cancelled" });
+    }
+
+    await cancelRequestRecord(requestItem.id || requestItem.requestId);
+
+    res.json({ success: true });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: "Could not cancel request" });
+  }
+});
+
+// ========== Matches ==========
+// 一覧
+app.get("/matches", async (req, res) => {
+  try {
+    const data = await docClient.send(new ScanCommand({ TableName: MATCHES_TABLE }));
+    const items = (data.Items || []).sort((a, b) => (a.matchId > b.matchId ? 1 : -1));
+    res.json(items);
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: "Could not list matches" });
+  }
+});
+
+// 詳細
+app.get("/matches/:matchId", async (req, res) => {
+  const params = { TableName: MATCHES_TABLE, Key: { matchId: req.params.matchId } };
+  try {
+    const { Item } = await docClient.send(new GetCommand(params));
+    if (!Item) return res.status(404).json({ error: "Match not found" });
+    res.json(Item);
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: "Could not get match" });
+  }
+});
+
+// 管理者: 試合追加
+app.post("/admin/matches", requireAdmin, async (req, res) => {
+  const { matchId, opponent, date, time, venue, status } = req.body || {};
+  if (!matchId || !opponent || !date || !time || !venue) {
+    return res.status(400).json({ error: "matchId, opponent, date, time, venue are required" });
+  }
+
+  try {
+    // 既存チェック
+    const exist = await docClient.send(new GetCommand({ TableName: MATCHES_TABLE, Key: { matchId } }));
+    if (exist.Item) return res.status(409).json({ error: "Match already exists" });
+
+    const item = {
+      matchId,
+      opponent,
+      date,
+      time,
+      venue,
+      status: status || "scheduled",
+      createdAt: new Date().toISOString(),
+    };
+    await docClient.send(new PutCommand({ TableName: MATCHES_TABLE, Item: item }));
+    res.json(item);
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: "Could not create match" });
+  }
+});
+
+// 管理者: 試合更新
+app.put("/admin/matches/:matchId", requireAdmin, async (req, res) => {
+  const matchId = req.params.matchId;
+  const { opponent, date, time, venue, status } = req.body || {};
+
+  try {
+    const { Item } = await docClient.send(new GetCommand({ TableName: MATCHES_TABLE, Key: { matchId } }));
+    if (!Item) return res.status(404).json({ error: "Match not found" });
+
+    const updated = {
+      ...Item,
+      opponent: opponent !== undefined ? opponent : Item.opponent,
+      date: date !== undefined ? date : Item.date,
+      time: time !== undefined ? time : Item.time,
+      venue: venue !== undefined ? venue : Item.venue,
+      status: status !== undefined ? status : Item.status,
+      updatedAt: new Date().toISOString(),
+    };
+
+    await docClient.send(new PutCommand({ TableName: MATCHES_TABLE, Item: updated }));
+    res.json(updated);
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: "Could not update match" });
+  }
+});
+
+// 管理者: 試合削除
+app.delete("/admin/matches/:matchId", requireAdmin, async (req, res) => {
+  const matchId = req.params.matchId;
+
+  try {
+    const { DeleteCommand } = require("@aws-sdk/lib-dynamodb");
+    await docClient.send(new DeleteCommand({ TableName: MATCHES_TABLE, Key: { matchId } }));
+    res.json({ message: "Match deleted successfully" });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: "Could not delete match" });
+  }
+});
+
+// 管理者: 試合別統計
+app.get("/admin/matches/:matchId/stats", requireAdmin, async (req, res) => {
+  const matchId = req.params.matchId;
+
+  try {
+    const [chatsData, checkinsData] = await Promise.all([
+      docClient.send(new ScanCommand({ TableName: CHATS_TABLE })),
+      docClient.send(new ScanCommand({ TableName: CHECKINS_TABLE })),
+    ]);
+
+    const chats = (chatsData.Items || []).filter((c) => c.matchId === matchId);
+    const checkins = (checkinsData.Items || []).filter((c) => c.matchId === matchId);
+
+    res.json({
+      chatCount: chats.length,
+      checkinCount: checkins.length,
+    });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: "Could not fetch match stats" });
+  }
+});
+
+// ========== Chats ==========
+// チャット一覧（ユーザーIDでフィルター）
+app.get("/chats", requireAuth, async (req, res) => {
+  const userId = req.user?.sub;
+  try {
+    const data = await docClient.send(new ScanCommand({ TableName: CHATS_TABLE }));
+    const items = (data.Items || []).filter((c) => Array.isArray(c.participants) && c.participants.includes(userId));
+    res.json(items);
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: "Could not list chats" });
+  }
+});
+
+// 管理者: 全チャット一覧取得
+app.get("/admin/chats", requireAdmin, async (req, res) => {
+  try {
+    const data = await docClient.send(new ScanCommand({ TableName: CHATS_TABLE }));
+    const chats = data.Items || [];
+    res.json(chats);
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: "Could not list chats" });
+  }
+});
+
+// 管理者: メッセージ削除
+app.delete("/admin/chats/:chatId/messages/:messageId", requireAdmin, async (req, res) => {
+  const { chatId, messageId } = req.params;
+
+  try {
+    const { DeleteCommand } = require("@aws-sdk/lib-dynamodb");
+    await docClient.send(
+      new DeleteCommand({
+        TableName: MESSAGES_TABLE,
+        Key: { chatId, messageId },
+      })
+    );
+    res.json({ message: "Message deleted successfully" });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: "Could not delete message" });
+  }
+});
+
+// チャット詳細 + メッセージ一覧
+app.get("/chats/:chatId", requireAuth, async (req, res) => {
+  const chatId = req.params.chatId;
+  try {
+    const chatResp = await docClient.send(new GetCommand({ TableName: CHATS_TABLE, Key: { chatId } }));
+    if (!chatResp.Item) return res.status(404).json({ error: "Chat not found" });
+    const isMember = Array.isArray(chatResp.Item.participants) && chatResp.Item.participants.includes(req.user?.sub);
+    if (!isMember) return res.status(403).json({ error: "Forbidden" });
+    const msgResp = await docClient.send(
+      new QueryCommand({
+        TableName: MESSAGES_TABLE,
+        KeyConditionExpression: "chatId = :c",
+        ExpressionAttributeValues: { ":c": chatId },
+        ScanIndexForward: true,
+      })
+    );
+    res.json({ chat: chatResp.Item, messages: msgResp.Items || [] });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: "Could not get chat" });
+  }
+});
+
+// メッセージ送信
+app.post("/chats/:chatId/messages", requireAuth, async (req, res) => {
+  const chatId = req.params.chatId;
+  const { text } = req.body || {};
+  if (!text) return res.status(400).json({ error: "text is required" });
+  const sid = req.user?.sub;
+  // ensure membership
+  try {
+    const chatResp = await docClient.send(new GetCommand({ TableName: CHATS_TABLE, Key: { chatId } }));
+    if (!chatResp.Item) return res.status(404).json({ error: "Chat not found" });
+    const isMember = Array.isArray(chatResp.Item.participants) && chatResp.Item.participants.includes(sid);
+    if (!isMember) return res.status(403).json({ error: "Forbidden" });
+  } catch (err) {
+    console.error(err);
+    return res.status(500).json({ error: "Could not verify chat membership" });
+  }
+  const messageId = Date.now().toString();
+  const item = {
+    chatId,
+    messageId,
+    text,
+    senderId: sid,
+    createdAt: new Date().toISOString(),
+  };
+  try {
+    await docClient.send(new PutCommand({ TableName: MESSAGES_TABLE, Item: item }));
+    res.json(item);
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: "Could not send message" });
+  }
+});
+
+// ========== ギラ飲み: 試合後チャット関連 ==========
+
+// Get all restaurants
+app.get("/restaurants", async (req, res) => {
+  try {
+    const data = await docClient.send(new ScanCommand({ TableName: RESTAURANTS_TABLE }));
+    const items = (data.Items || []).map(mapRestaurantItem);
+    res.json(items);
+  } catch (error) {
+    console.error("Error fetching restaurants:", error);
+    res.status(500).json({ error: "Could not fetch restaurants", details: error.message });
+  }
+});
+
+// Enrich restaurants with Google Places details
+app.post("/restaurants/details", async (req, res) => {
+  const { restaurants } = req.body;
+  const apiKey = process.env.PLACES_API_KEY;
+
+  if (!apiKey) {
+    return res.json(restaurants);
+  }
+
+  if (!Array.isArray(restaurants) || restaurants.length === 0) {
+    return res.status(400).json({ error: "Invalid request body" });
+  }
+
+  try {
+    const enrichedRestaurants = await Promise.all(
+      restaurants.map(async (restaurant) => {
+        try {
+          const findPlaceUrl = new URL("https://maps.googleapis.com/maps/api/place/findplacefromtext/json");
+          findPlaceUrl.searchParams.append("input", restaurant.name);
+          findPlaceUrl.searchParams.append("inputtype", "textquery");
+          findPlaceUrl.searchParams.append("fields", "place_id,name,photos");
+          findPlaceUrl.searchParams.append("key", apiKey);
+
+          const findPlaceRes = await fetch(findPlaceUrl.toString());
+          const findPlaceData = await findPlaceRes.json();
+
+          if (findPlaceData.status !== "OK" || !findPlaceData.candidates || findPlaceData.candidates.length === 0) {
+            return restaurant;
+          }
+
+          const place = findPlaceData.candidates[0];
+          const newRestaurant = { ...restaurant, name: place.name };
+
+          if (place.photos && place.photos.length > 0) {
+            const photoReference = place.photos[0].photo_reference;
+            const photoUrl = new URL("https://maps.googleapis.com/maps/api/place/photo");
+            photoUrl.searchParams.append("maxwidth", "400");
+            photoUrl.searchParams.append("photoreference", photoReference);
+            photoUrl.searchParams.append("key", apiKey);
+            newRestaurant.imageUrl = photoUrl.toString();
+          }
+
+          return newRestaurant;
+        } catch (error) {
+          return restaurant;
+        }
+      })
+    );
+
+    res.json(enrichedRestaurants);
+  } catch (error) {
+    res.status(500).json({ error: "Failed to enrich restaurant data" });
+  }
+});
+
+app.get("/matches/:matchId/restaurants", requireAuth, async (req, res) => {
+  if (!RESTAURANTS_TABLE) {
+    return res.status(500).json({ error: "Restaurants table is not configured" });
+  }
+
+  const { matchId } = req.params;
+  const category = req.query.category;
+  const parsedLimit = parseInt(req.query.limit, 10);
+
+  try {
+    const { Item: match } = await docClient.send(
+      new GetCommand({ TableName: MATCHES_TABLE, Key: { matchId } })
+    );
+    if (!match) return res.status(404).json({ error: "Match not found" });
+    if (!match.venue) return res.status(400).json({ error: "Match venue is not set" });
+
+    const queryParams = {
+      TableName: RESTAURANTS_TABLE,
+      IndexName: "VenueDistanceIndex",
+      KeyConditionExpression: "venue = :venue",
+      ExpressionAttributeValues: {
+        ":venue": match.venue,
+      },
+      ScanIndexForward: true,
+    };
+
+    if (!Number.isNaN(parsedLimit) && parsedLimit > 0) {
+      queryParams.Limit = parsedLimit;
+    }
+
+    if (category) {
+      queryParams.FilterExpression = "category = :category";
+      queryParams.ExpressionAttributeValues[":category"] = category;
+    }
+
+    const data = await docClient.send(new QueryCommand(queryParams));
+    res.json({
+      restaurants: (data.Items || []).map(mapRestaurantItem),
+      venue: {
+        venueId: match.venueId || match.venue,
+        name: match.venue,
+        latitude: match.latitude,
+        longitude: match.longitude,
+      },
+    });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: "Could not fetch restaurants" });
+  }
+});
+
+app.get("/matches/:matchId/post-match-chat", requireAuth, async (req, res) => {
+  if (!POST_MATCH_CHATS_TABLE || !CHAT_PARTICIPANTS_TABLE) {
+    return res.status(500).json({ error: "Post-match chat tables are not configured" });
+  }
+
+  const { matchId } = req.params;
+  const userId = getCurrentUserId(req);
+  if (!userId) return res.status(401).json({ error: "Unauthorized" });
+
+  try {
+    const chatResp = await docClient.send(
+      new QueryCommand({
+        TableName: POST_MATCH_CHATS_TABLE,
+        IndexName: "MatchIdIndex",
+        KeyConditionExpression: "match_id = :matchId",
+        ExpressionAttributeValues: { ":matchId": matchId },
+        Limit: 1,
+      })
+    );
+
+    const chatItem = chatResp.Items && chatResp.Items[0];
+    if (!chatItem) {
+      return res.status(404).json({ error: "Chat not found or not accessible" });
+    }
+
+    const chatId = chatItem.chat_id;
+
+    const participantResp = await docClient.send(
+      new GetCommand({
+        TableName: CHAT_PARTICIPANTS_TABLE,
+        Key: { chat_id: chatId, user_id: userId },
+      })
+    );
+
+    if (!participantResp.Item) {
+      return res.status(403).json({ error: "Chat not found or not accessible" });
+    }
+
+    const [messagesResp, matchResp] = await Promise.all([
+      docClient.send(
+        new QueryCommand({
+          TableName: POST_MATCH_CHAT_MESSAGES_TABLE,
+          IndexName: "ChatIdCreatedAtIndex",
+          KeyConditionExpression: "chat_id = :chatId",
+          ExpressionAttributeValues: { ":chatId": chatId },
+          ScanIndexForward: true,
+          Limit: 100,
+        })
+      ),
+      docClient.send(new GetCommand({ TableName: MATCHES_TABLE, Key: { matchId } })),
+    ]);
+
+    const messageItems = messagesResp.Items || [];
+    const [restaurantMap, userMap] = await Promise.all([
+      batchGetRestaurantsByIds(messageItems.map((item) => item.restaurant_id)),
+      batchGetUsersByIds(messageItems.map((item) => item.user_id)),
+    ]);
+
+    const messages = messageItems.map((item) =>
+      mapMessageResponse(item, item.restaurant_id ? restaurantMap[item.restaurant_id] : null, userMap[item.user_id])
+    );
+
+    res.json({
+      chat: mapChatResponse(chatItem, matchResp.Item),
+      messages,
+      userParticipation: {
+        isParticipant: true,
+        joinedAt: participantResp.Item.joined_at,
+        lastReadAt: participantResp.Item.last_read_at || null,
+      },
+    });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: "Could not fetch chat" });
+  }
+});
+
+app.post("/post-match-chats/:chatId/messages", requireAuth, async (req, res) => {
+  if (!POST_MATCH_CHAT_MESSAGES_TABLE || !CHAT_PARTICIPANTS_TABLE) {
+    return res.status(500).json({ error: "Post-match chat tables are not configured" });
+  }
+
+  const { chatId } = req.params;
+  const userId = getCurrentUserId(req);
+  if (!userId) return res.status(401).json({ error: "Unauthorized" });
+
+  const { text, restaurantId } = req.body || {};
+  if (!text || typeof text !== "string" || !text.trim()) {
+    return res.status(400).json({ error: "text is required" });
+  }
+  if (text.length > 500) {
+    return res.status(400).json({ error: "text must be 500 characters or less" });
+  }
+
+  try {
+    const chatResp = await docClient.send(
+      new GetCommand({ TableName: POST_MATCH_CHATS_TABLE, Key: { chat_id: chatId } })
+    );
+    if (!chatResp.Item) return res.status(404).json({ error: "Chat not found or not accessible" });
+    if (chatResp.Item.is_closed) return res.status(410).json({ error: "Chat is closed" });
+
+    const participantResp = await docClient.send(
+      new GetCommand({
+        TableName: CHAT_PARTICIPANTS_TABLE,
+        Key: { chat_id: chatId, user_id: userId },
+      })
+    );
+    if (!participantResp.Item) {
+      return res.status(403).json({ error: "Chat not found or not accessible" });
+    }
+
+    let restaurant = null;
+    if (restaurantId) {
+      const restaurantResp = await docClient.send(
+        new GetCommand({
+          TableName: RESTAURANTS_TABLE,
+          Key: { restaurant_id: restaurantId },
+        })
+      );
+      if (!restaurantResp.Item) {
+        return res.status(404).json({ error: "Restaurant not found" });
+      }
+      restaurant = mapRestaurantItem(restaurantResp.Item);
+    }
+
+    const now = new Date().toISOString();
+    const messageId = `msg_${Date.now()}`;
+    const messageItem = {
+      message_id: messageId,
+      chat_id: chatId,
+      user_id: userId,
+      text: text.trim(),
+      created_at: now,
+      updated_at: null,
+      is_deleted: false,
+      ...(restaurantId ? { restaurant_id: restaurantId } : {}),
+    };
+
+    await docClient.send(
+      new PutCommand({ TableName: POST_MATCH_CHAT_MESSAGES_TABLE, Item: messageItem })
+    );
+
+    if (restaurantId) {
+      const shareItem = {
+        share_id: `share_${Date.now()}`,
+        chat_id: chatId,
+        restaurant_id: restaurantId,
+        message_id: messageId,
+        user_id: userId,
+        created_at: now,
+      };
+      await docClient.send(new PutCommand({ TableName: RESTAURANT_SHARES_TABLE, Item: shareItem }));
+    }
+
+    await docClient.send(
+      new UpdateCommand({
+        TableName: CHAT_PARTICIPANTS_TABLE,
+        Key: { chat_id: chatId, user_id: userId },
+        UpdateExpression: "SET last_read_at = :now",
+        ExpressionAttributeValues: { ":now": now },
+      })
+    );
+
+    const userMap = await batchGetUsersByIds([userId]);
+
+    res.status(201).json({
+      message: mapMessageResponse(messageItem, restaurant, userMap[userId]),
+    });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: "Could not send message" });
+  }
+});
+
+app.get("/post-match-chats/:chatId/restaurant-shares", requireAuth, async (req, res) => {
+  if (!RESTAURANT_SHARES_TABLE || !CHAT_PARTICIPANTS_TABLE) {
+    return res.status(500).json({ error: "Restaurant share table is not configured" });
+  }
+
+  const { chatId } = req.params;
+  const userId = getCurrentUserId(req);
+  if (!userId) return res.status(401).json({ error: "Unauthorized" });
+
+  try {
+    const participantResp = await docClient.send(
+      new GetCommand({
+        TableName: CHAT_PARTICIPANTS_TABLE,
+        Key: { chat_id: chatId, user_id: userId },
+      })
+    );
+    if (!participantResp.Item) {
+      return res.status(403).json({ error: "Chat not found or not accessible" });
+    }
+
+    const sharesResp = await docClient.send(
+      new QueryCommand({
+        TableName: RESTAURANT_SHARES_TABLE,
+        IndexName: "ChatIdRestaurantIdIndex",
+        KeyConditionExpression: "chat_id = :chatId",
+        ExpressionAttributeValues: { ":chatId": chatId },
+      })
+    );
+
+    const shareItems = sharesResp.Items || [];
+    if (!shareItems.length) {
+      return res.json({ shares: [], totalShares: 0 });
+    }
+
+    const aggregated = shareItems.reduce((acc, item) => {
+      const existing = acc[item.restaurant_id] || {
+        restaurantId: item.restaurant_id,
+        count: 0,
+        lastSharedAt: item.created_at,
+      };
+      existing.count += 1;
+      if (item.created_at > existing.lastSharedAt) {
+        existing.lastSharedAt = item.created_at;
+      }
+      acc[item.restaurant_id] = existing;
+      return acc;
+    }, {});
+
+    const restaurantMap = await batchGetRestaurantsByIds(Object.keys(aggregated));
+
+    const shares = Object.values(aggregated).map((entry) => ({
+      restaurant: restaurantMap[entry.restaurantId] || { restaurantId: entry.restaurantId },
+      shareCount: entry.count,
+      lastSharedAt: entry.lastSharedAt,
+    }));
+
+    res.json({ shares, totalShares: shareItems.length });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: "Could not fetch restaurant shares" });
+  }
+});
+
+app.post("/matches/:matchId/post-match-chat/create", requireSystemAuth, async (req, res) => {
+  if (!POST_MATCH_CHATS_TABLE) {
+    return res.status(500).json({ error: "Post-match chat table is not configured" });
+  }
+
+  const { matchId } = req.params;
+  const { endTime } = req.body || {};
+  const nowIso = new Date().toISOString();
+
+  try {
+    const [matchResp, existingChatResp] = await Promise.all([
+      docClient.send(new GetCommand({ TableName: MATCHES_TABLE, Key: { matchId } })),
+      docClient.send(
+        new QueryCommand({
+          TableName: POST_MATCH_CHATS_TABLE,
+          IndexName: "MatchIdIndex",
+          KeyConditionExpression: "match_id = :matchId",
+          ExpressionAttributeValues: { ":matchId": matchId },
+          Limit: 1,
+        })
+      ),
+    ]);
+
+    if (!matchResp.Item) {
+      return res.status(404).json({ error: "Match not found" });
+    }
+
+    if (existingChatResp.Count > 0 && existingChatResp.Items?.length) {
+      return res.status(200).json({
+        alreadyExists: true,
+        chat: mapChatResponse(existingChatResp.Items[0], matchResp.Item),
+        participantCount: existingChatResp.Items[0].participant_count || 0,
+      });
+    }
+
+    const chatId = `pmc_${matchId}_${Date.now()}`;
+    let scheduledEndTime = endTime;
+    if (!scheduledEndTime) {
+      const base = matchResp.Item?.date ? new Date(matchResp.Item.date) : new Date();
+      base.setHours(23, 59, 59, 999);
+      scheduledEndTime = base.toISOString();
+    }
+
+    const checkinsResp = await docClient.send(
+      new QueryCommand({
+        TableName: CHECKINS_TABLE,
+        KeyConditionExpression: "matchId = :matchId",
+        ExpressionAttributeValues: { ":matchId": matchId },
+      })
+    );
+
+    const participantIds = (checkinsResp.Items || []).map((item) => item.userId).filter(Boolean);
+    const chatItem = {
+      chat_id: chatId,
+      match_id: matchId,
+      opponent: matchResp.Item.opponent,
+      venue: matchResp.Item.venue,
+      start_time: nowIso,
+      end_time: scheduledEndTime,
+      is_closed: false,
+      participant_count: participantIds.length,
+      created_at: nowIso,
+      updated_at: nowIso,
+    };
+
+    await docClient.send(new PutCommand({ TableName: POST_MATCH_CHATS_TABLE, Item: chatItem }));
+
+    for (const participantId of participantIds) {
+      await docClient.send(
+        new PutCommand({
+          TableName: CHAT_PARTICIPANTS_TABLE,
+          Item: {
+            chat_id: chatId,
+            user_id: participantId,
+            joined_at: nowIso,
+            last_read_at: null,
+          },
+        })
+      );
+    }
+
+    const userMap = await batchGetUsersByIds(participantIds);
+    const participants = participantIds.map((id) => ({
+      userId: id,
+      nickname: userMap[id]?.nickname || userMap[id]?.name || id,
+    }));
+
+    res.status(201).json({
+      chat: mapChatResponse(chatItem, matchResp.Item),
+      participants,
+      participantCount: participantIds.length,
+    });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: "Could not create post-match chat" });
+  }
+});
+
+app.post("/post-match-chats/:chatId/close", requireSystemAuth, async (req, res) => {
+  if (!POST_MATCH_CHATS_TABLE) {
+    return res.status(500).json({ error: "Post-match chat table is not configured" });
+  }
+
+  const { chatId } = req.params;
+
+  try {
+    const existing = await docClient.send(
+      new GetCommand({ TableName: POST_MATCH_CHATS_TABLE, Key: { chat_id: chatId } })
+    );
+    if (!existing.Item) {
+      return res.status(404).json({ error: "Chat not found" });
+    }
+
+    if (existing.Item.is_closed) {
+      return res.json({
+        success: true,
+        chat: {
+          chatId,
+          isClosed: true,
+          closedAt: existing.Item.closed_at || existing.Item.updated_at || existing.Item.end_time,
+        },
+      });
+    }
+
+    const closedAt = new Date().toISOString();
+    const updated = await docClient.send(
+      new UpdateCommand({
+        TableName: POST_MATCH_CHATS_TABLE,
+        Key: { chat_id: chatId },
+        UpdateExpression: "SET is_closed = :true, closed_at = :closedAt, updated_at = :closedAt",
+        ExpressionAttributeValues: {
+          ":true": true,
+          ":closedAt": closedAt,
+        },
+        ReturnValues: "ALL_NEW",
+      })
+    );
+
+    res.json({
+      success: true,
+      chat: {
+        chatId,
+        isClosed: true,
+        closedAt: updated.Attributes?.closed_at || closedAt,
+      },
+    });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: "Could not close chat" });
+  }
+});
+
+app.post("/post-match-chats/:chatId/notify", requireSystemAuth, async (req, res) => {
+  if (!CHAT_PARTICIPANTS_TABLE) {
+    return res.status(500).json({ error: "Chat participants table is not configured" });
+  }
+
+  const { chatId } = req.params;
+  const { type = "chat_opened", message = "ギラ飲みチャットが開設されました！" } = req.body || {};
+
+  try {
+    const participantsResp = await docClient.send(
+      new QueryCommand({
+        TableName: CHAT_PARTICIPANTS_TABLE,
+        KeyConditionExpression: "chat_id = :chatId",
+        ExpressionAttributeValues: { ":chatId": chatId },
+      })
+    );
+
+    const participants = participantsResp.Items || [];
+    if (!participants.length) {
+      return res.status(404).json({ error: "No participants found for this chat" });
+    }
+
+    const userIds = participants.map((item) => item.user_id);
+    const userMap = await batchGetUsersByIds(userIds);
+
+    const recipients = participants.map((item) => ({
+      userId: item.user_id,
+      nickname: userMap[item.user_id]?.nickname || userMap[item.user_id]?.name || item.user_id,
+      lastReadAt: item.last_read_at || null,
+      joinedAt: item.joined_at,
+    }));
+
+    res.json({
+      success: true,
+      type,
+      message,
+      notifiedUsers: recipients.length,
+      recipients,
+    });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: "Could not send notifications" });
+  }
+});
+
+// ========== Admin: Check-ins ==========
+
+// 管理者: 全チェックイン取得
+app.get("/admin/check-ins", requireAdmin, async (req, res) => {
+  try {
+    const data = await docClient.send(new ScanCommand({ TableName: CHECKINS_TABLE }));
+    const checkins = data.Items || [];
+
+    // 試合情報とユーザー情報を取得
+    const matchesData = await docClient.send(new ScanCommand({ TableName: MATCHES_TABLE }));
+    const matches = matchesData.Items || [];
+
+    const enriched = checkins.map((checkin) => {
+      const match = matches.find((m) => m.matchId === checkin.matchId);
+      return {
+        ...checkin,
+        matchInfo: match ? { opponent: match.opponent, date: match.date } : null,
+      };
+    });
+
+    res.json(enriched);
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: "Could not list check-ins" });
+  }
+});
+
+// 管理者: 重複チェックイン検出
+app.get("/admin/check-ins/duplicates", requireAdmin, async (req, res) => {
+  try {
+    const data = await docClient.send(new ScanCommand({ TableName: CHECKINS_TABLE }));
+    const checkins = data.Items || [];
+
+    // ユーザーごと、試合ごとにグループ化
+    const grouped = checkins.reduce((acc, checkin) => {
+      const key = `${checkin.userId}_${checkin.matchId}`;
+      if (!acc[key]) {
+        acc[key] = [];
+      }
+      acc[key].push(checkin);
+      return acc;
+    }, {});
+
+    // 重複を検出（同じユーザー・試合で複数のチェックイン）
+    const duplicates = Object.entries(grouped)
+      .filter(([_, items]) => items.length > 1)
+      .map(([key, items]) => ({
+        userId: items[0].userId,
+        matchId: items[0].matchId,
+        count: items.length,
+        checkins: items,
+      }));
+
+    res.json(duplicates);
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: "Could not detect duplicates" });
+  }
+});
+
+// 管理者: チェックイン削除
+app.delete("/admin/check-ins/:matchId/:userId", requireAdmin, async (req, res) => {
+  const { matchId, userId } = req.params;
+
+  try {
+    const { DeleteCommand } = require("@aws-sdk/lib-dynamodb");
+    await docClient.send(
+      new DeleteCommand({
+        TableName: CHECKINS_TABLE,
+        Key: { matchId, userId },
+      })
+    );
+    res.json({ message: "Check-in deleted successfully" });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: "Could not delete check-in" });
+  }
+});
+
+// ========== Check-ins ==========
+// 来場チェック一覧（ユーザー別）
+app.get("/check-ins", requireAuth, async (req, res) => {
+  const userId = req.user?.sub;
+  try {
+    // 全試合
+    const matchesResp = await docClient.send(new ScanCommand({ TableName: MATCHES_TABLE }));
+    const matches = matchesResp.Items || [];
+    // 参加チャット（=パートナー情報を持つ）
+    const chatsResp = await docClient.send(new ScanCommand({ TableName: CHATS_TABLE }));
+    const chats = (chatsResp.Items || []).filter((c) => Array.isArray(c.participants) && c.participants.includes(userId));
+    // チェックイン状況
+    const checkinsResp = await docClient.send(new ScanCommand({ TableName: CHECKINS_TABLE }));
+    const checkins = checkinsResp.Items || [];
+
+    const list = chats.map((chat) => {
+      const match = matches.find((m) => m.matchId === chat.matchId) || {};
+      const my = checkins.find((c) => c.matchId === chat.matchId && c.userId === userId);
+      const partnerId = (chat.participants || []).find((p) => p !== userId);
+      const partnerCheck = checkins.find((c) => c.matchId === chat.matchId && c.userId === partnerId);
+      return {
+        id: chat.matchId,
+        date: match.date,
+        time: match.time,
+        opponent: match.opponent,
+        venue: match.venue,
+        partner: chat.partner,
+        myCheckIn: !!(my && my.checkedIn),
+        partnerCheckedIn: !!(partnerCheck && partnerCheck.checkedIn),
+      };
+    });
+    res.json(list);
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: "Could not list check-ins" });
+  }
+});
+
+// 来場チェック登録
+app.post("/check-ins", requireAuth, async (req, res) => {
+  const { matchId, checkedIn } = req.body || {};
+  if (!matchId) return res.status(400).json({ error: "matchId is required" });
+  const uid = req.user?.sub;
+  const item = { matchId, userId: uid, checkedIn: checkedIn ?? true };
+  try {
+    await docClient.send(new PutCommand({ TableName: CHECKINS_TABLE, Item: item }));
+    res.json(item);
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: "Could not check-in" });
+  }
+});
+
+// ========== Reviews ==========
+app.post("/reviews", requireAuth, async (req, res) => {
+  const { matchId, partnerId, rating, message } = req.body || {};
+  if (!matchId || !partnerId || !rating) return res.status(400).json({ error: "matchId, partnerId, rating are required" });
+  const reviewId = Date.now().toString();
+  const item = {
+    reviewId,
+    matchId,
+    partnerId,
+    rating,
+    message: message || "",
+    userId: req.user?.sub,
+    createdAt: new Date().toISOString(),
+    approved: false,
+  };
+  try {
+    await docClient.send(new PutCommand({ TableName: REVIEWS_TABLE, Item: item }));
+    res.json(item);
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: "Could not submit review" });
+  }
+});
+
+// 管理者: 全レビュー取得
+app.get("/admin/reviews", requireAdmin, async (req, res) => {
+  try {
+    const data = await docClient.send(new ScanCommand({ TableName: REVIEWS_TABLE }));
+    const reviews = data.Items || [];
+
+    // 日時順でソート（新しい順）
+    reviews.sort((a, b) => {
+      const dateA = new Date(a.createdAt || 0);
+      const dateB = new Date(b.createdAt || 0);
+      return dateB.getTime() - dateA.getTime();
+    });
+
+    res.json(reviews);
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: "Could not list reviews" });
+  }
+});
+
+// 管理者: レビュー承認
+app.put("/admin/reviews/:reviewId/approve", requireAdmin, async (req, res) => {
+  const reviewId = req.params.reviewId;
+
+  try {
+    const { Item } = await docClient.send(
+      new GetCommand({ TableName: REVIEWS_TABLE, Key: { reviewId } })
+    );
+
+    if (!Item) return res.status(404).json({ error: "Review not found" });
+
+    const updated = {
+      ...Item,
+      approved: true,
+      updatedAt: new Date().toISOString(),
+    };
+
+    await docClient.send(new PutCommand({ TableName: REVIEWS_TABLE, Item: updated }));
+    res.json(updated);
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: "Could not approve review" });
+  }
+});
+
+// 管理者: レビュー削除
+app.delete("/admin/reviews/:reviewId", requireAdmin, async (req, res) => {
+  const reviewId = req.params.reviewId;
+
+  try {
+    const { DeleteCommand } = require("@aws-sdk/lib-dynamodb");
+    await docClient.send(new DeleteCommand({ TableName: REVIEWS_TABLE, Key: { reviewId } }));
+    res.json({ message: "Review deleted successfully" });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: "Could not delete review" });
+  }
+});
+
+// 管理者: レビュー統計
+app.get("/admin/reviews/stats", requireAdmin, async (req, res) => {
+  try {
+    const data = await docClient.send(new ScanCommand({ TableName: REVIEWS_TABLE }));
+    const reviews = data.Items || [];
+
+    const total = reviews.length;
+    const approved = reviews.filter((r) => r.approved).length;
+    const pending = total - approved;
+
+    // 平均評価
+    const avgRating = total > 0
+      ? reviews.reduce((sum, r) => sum + (r.rating || 0), 0) / total
+      : 0;
+
+    res.json({
+      total,
+      approved,
+      pending,
+      avgRating: Math.round(avgRating * 10) / 10,
+    });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: "Could not fetch review stats" });
+  }
+});
+
+// ユーザー取得
+app.get("/users/:userId", async (req, res) => {
+  const params = { TableName: USERS_TABLE, Key: { userId: req.params.userId } };
+  try {
+    const { Item } = await docClient.send(new GetCommand(params));
+    if (Item) res.json(Item);
+    else res.status(404).json({ error: "User not found" });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: "Could not retrieve user" });
+  }
+});
+
+// ユーザー登録
+app.post("/users", async (req, res) => {
+  const { userId, name } = req.body;
+  if (!userId || !name)
+    return res.status(400).json({ error: "userId and name are required" });
+
+  try {
+    await docClient.send(
+      new PutCommand({ TableName: USERS_TABLE, Item: { userId, name } })
+    );
+    res.json({ userId, name });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: "Could not create user" });
+  }
+});
+
+// ========== Admin: Reports ==========
+
+// 管理者: 報告一覧取得
+app.get("/admin/reports", requireAdmin, async (req, res) => {
+  try {
+    const { status } = req.query;
+    const data = await docClient.send(new ScanCommand({ TableName: REPORTS_TABLE }));
+    let reports = data.Items || [];
+
+    // ステータスフィルター
+    if (status && typeof status === "string" && status !== "all") {
+      reports = reports.filter((r) => r.status === status);
+    }
+
+    // 日時順でソート（新しい順）
+    reports.sort((a, b) => {
+      const dateA = new Date(a.createdAt || 0);
+      const dateB = new Date(b.createdAt || 0);
+      return dateB.getTime() - dateA.getTime();
+    });
+
+    res.json(reports);
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: "Could not list reports" });
+  }
+});
+
+// 管理者: 報告詳細取得
+app.get("/admin/reports/:reportId", requireAdmin, async (req, res) => {
+  const reportId = req.params.reportId;
+
+  try {
+    const { Item } = await docClient.send(
+      new GetCommand({ TableName: REPORTS_TABLE, Key: { reportId } })
+    );
+
+    if (!Item) return res.status(404).json({ error: "Report not found" });
+
+    // 報告者と被報告者の情報を取得
+    const [reporterData, reportedData] = await Promise.all([
+      docClient.send(new GetCommand({ TableName: USERS_TABLE, Key: { userId: Item.reporterId } })),
+      docClient.send(new GetCommand({ TableName: USERS_TABLE, Key: { userId: Item.reportedUserId } })),
+    ]);
+
+    const reporter = reporterData.Item ? { userId: reporterData.Item.userId, name: reporterData.Item.name } : null;
+    const reportedUser = reportedData.Item ? { userId: reportedData.Item.userId, name: reportedData.Item.name } : null;
+
+    res.json({
+      ...Item,
+      reporter,
+      reportedUser,
+    });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: "Could not get report" });
+  }
+});
+
+// 管理者: 報告対応・更新
+app.put("/admin/reports/:reportId", requireAdmin, async (req, res) => {
+  const reportId = req.params.reportId;
+  const { status, actionTaken, notes } = req.body || {};
+
+  try {
+    const { Item } = await docClient.send(
+      new GetCommand({ TableName: REPORTS_TABLE, Key: { reportId } })
+    );
+
+    if (!Item) return res.status(404).json({ error: "Report not found" });
+
+    const updated = {
+      ...Item,
+      status: status !== undefined ? status : Item.status,
+      actionTaken: actionTaken !== undefined ? actionTaken : Item.actionTaken,
+      notes: notes !== undefined ? notes : Item.notes,
+      updatedAt: new Date().toISOString(),
+      handledBy: req.user?.sub,
+    };
+
+    await docClient.send(new PutCommand({ TableName: REPORTS_TABLE, Item: updated }));
+    res.json(updated);
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: "Could not update report" });
+  }
+});
+
+// 管理者: 報告対応アクション実行
+app.post("/admin/reports/:reportId/actions", requireAdmin, async (req, res) => {
+  const reportId = req.params.reportId;
+  const { action, reason } = req.body || {}; // action: warn, suspend, delete, dismiss
+
+  try {
+    const { Item: report } = await docClient.send(
+      new GetCommand({ TableName: REPORTS_TABLE, Key: { reportId } })
+    );
+
+    if (!report) return res.status(404).json({ error: "Report not found" });
+
+    let actionTaken = "";
+    let newStatus = report.status;
+
+    // アクションに応じて被報告者のステータスを変更
+    if (action === "warn") {
+      actionTaken = "警告を送信しました";
+      newStatus = "resolved";
+    } else if (action === "suspend") {
+      // ユーザーを停止
+      const { Item: user } = await docClient.send(
+        new GetCommand({ TableName: USERS_TABLE, Key: { userId: report.reportedUserId } })
+      );
+      if (user) {
+        await docClient.send(
+          new PutCommand({
+            TableName: USERS_TABLE,
+            Item: { ...user, suspended: true, updatedAt: new Date().toISOString() },
+          })
+        );
+      }
+      actionTaken = `アカウントを停止しました。理由: ${reason || "規約違反"}`;
+      newStatus = "resolved";
+    } else if (action === "delete") {
+      // ユーザーを削除済みに
+      const { Item: user } = await docClient.send(
+        new GetCommand({ TableName: USERS_TABLE, Key: { userId: report.reportedUserId } })
+      );
+      if (user) {
+        await docClient.send(
+          new PutCommand({
+            TableName: USERS_TABLE,
+            Item: { ...user, deleted: true, updatedAt: new Date().toISOString() },
+          })
+        );
+      }
+      actionTaken = `アカウントを削除済みにしました。理由: ${reason || "重大な規約違反"}`;
+      newStatus = "resolved";
+    } else if (action === "dismiss") {
+      actionTaken = "報告を却下しました";
+      newStatus = "resolved";
+    } else {
+      return res.status(400).json({ error: "Invalid action" });
+    }
+
+    // 報告を更新
+    const updated = {
+      ...report,
+      status: newStatus,
+      actionTaken,
+      updatedAt: new Date().toISOString(),
+      handledBy: req.user?.sub,
+    };
+
+    await docClient.send(new PutCommand({ TableName: REPORTS_TABLE, Item: updated }));
+
+    res.json({ message: "Action executed successfully", report: updated });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: "Could not execute action" });
+  }
+});
+
+// ========== Admin: Users ==========
+
+// 管理者: ユーザー一覧取得
+app.get("/admin/users", requireAdmin, async (req, res) => {
+  try {
+    const { search, status } = req.query;
+    const data = await docClient.send(new ScanCommand({ TableName: USERS_TABLE }));
+    let users = data.Items || [];
+
+    // 検索フィルター
+    if (search && typeof search === "string") {
+      const searchLower = search.toLowerCase();
+      users = users.filter(
+        (u) =>
+          u.userId?.toLowerCase().includes(searchLower) ||
+          u.name?.toLowerCase().includes(searchLower)
+      );
+    }
+
+    // ステータスフィルター
+    if (status && typeof status === "string" && status !== "all") {
+      if (status === "active") {
+        users = users.filter((u) => !u.suspended && !u.deleted);
+      } else if (status === "suspended") {
+        users = users.filter((u) => u.suspended);
+      } else if (status === "deleted") {
+        users = users.filter((u) => u.deleted);
+      }
+    }
+
+    // パスワードハッシュは除外
+    const sanitized = users.map(({ passwordHash, ...rest }) => rest);
+
+    res.json(sanitized);
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: "Could not list users" });
+  }
+});
+
+// 管理者: ユーザー詳細取得
+app.get("/admin/users/:userId", requireAdmin, async (req, res) => {
+  const userId = req.params.userId;
+
+  try {
+    const { Item } = await docClient.send(
+      new GetCommand({ TableName: USERS_TABLE, Key: { userId } })
+    );
+
+    if (!Item) return res.status(404).json({ error: "User not found" });
+
+    // パスワードハッシュは除外
+    const { passwordHash, ...user } = Item;
+
+    res.json(user);
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: "Could not get user" });
+  }
+});
+
+// 管理者: ユーザー情報更新
+app.put("/admin/users/:userId", requireAdmin, async (req, res) => {
+  const userId = req.params.userId;
+  const { name } = req.body || {};
+
+  try {
+    const { Item } = await docClient.send(
+      new GetCommand({ TableName: USERS_TABLE, Key: { userId } })
+    );
+
+    if (!Item) return res.status(404).json({ error: "User not found" });
+
+    const updated = {
+      ...Item,
+      name: name !== undefined ? name : Item.name,
+      updatedAt: new Date().toISOString(),
+    };
+
+    await docClient.send(new PutCommand({ TableName: USERS_TABLE, Item: updated }));
+
+    const { passwordHash, ...sanitized } = updated;
+    res.json(sanitized);
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: "Could not update user" });
+  }
+});
+
+// 管理者: ユーザーステータス変更
+app.put("/admin/users/:userId/status", requireAdmin, async (req, res) => {
+  const userId = req.params.userId;
+  const { suspended, deleted } = req.body || {};
+
+  try {
+    const { Item } = await docClient.send(
+      new GetCommand({ TableName: USERS_TABLE, Key: { userId } })
+    );
+
+    if (!Item) return res.status(404).json({ error: "User not found" });
+
+    const updated = {
+      ...Item,
+      suspended: suspended !== undefined ? suspended : Item.suspended,
+      deleted: deleted !== undefined ? deleted : Item.deleted,
+      updatedAt: new Date().toISOString(),
+    };
+
+    await docClient.send(new PutCommand({ TableName: USERS_TABLE, Item: updated }));
+
+    const { passwordHash, ...sanitized } = updated;
+    res.json(sanitized);
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: "Could not update user status" });
+  }
+});
+
+// 管理者: ユーザー削除
+app.delete("/admin/users/:userId", requireAdmin, async (req, res) => {
+  const userId = req.params.userId;
+
+  try {
+    const { DeleteCommand } = require("@aws-sdk/lib-dynamodb");
+    await docClient.send(new DeleteCommand({ TableName: USERS_TABLE, Key: { userId } }));
+    res.json({ message: "User deleted successfully" });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: "Could not delete user" });
+  }
+});
+
+// 管理者: ユーザーアクティビティ履歴
+app.get("/admin/users/:userId/activity", requireAdmin, async (req, res) => {
+  const userId = req.params.userId;
+
+  try {
+    const [chatsData, checkinsData, reviewsData] = await Promise.all([
+      docClient.send(new ScanCommand({ TableName: CHATS_TABLE })),
+      docClient.send(new ScanCommand({ TableName: CHECKINS_TABLE })),
+      docClient.send(new ScanCommand({ TableName: REVIEWS_TABLE })),
+    ]);
+
+    const chats = (chatsData.Items || []).filter((c) =>
+      Array.isArray(c.participants) && c.participants.includes(userId)
+    );
+    const checkins = (checkinsData.Items || []).filter((c) => c.userId === userId);
+    const reviews = (reviewsData.Items || []).filter((r) => r.userId === userId);
+
+    res.json({
+      chats: chats.length,
+      checkins: checkins.length,
+      reviews: reviews.length,
+      chatList: chats,
+      checkinList: checkins,
+      reviewList: reviews,
+    });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: "Could not fetch user activity" });
+  }
+});
+
+app.use((req, res) => res.status(404).json({ error: "Not Found" }));
+
+exports.handler = serverless(app);
+module.exports.app = app; // local用にexport
