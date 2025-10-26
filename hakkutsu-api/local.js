@@ -1,5 +1,5 @@
 const { DynamoDBClient, CreateTableCommand, DescribeTableCommand } = require("@aws-sdk/client-dynamodb");
-const { DynamoDBDocumentClient, PutCommand, ScanCommand } = require("@aws-sdk/lib-dynamodb");
+const { DynamoDBDocumentClient, PutCommand, ScanCommand, GetCommand } = require("@aws-sdk/lib-dynamodb");
 const { app } = require("./handler");
 const bcrypt = require("bcryptjs");
 
@@ -21,7 +21,7 @@ async function ensureUsersTable() {
 
   const client = new DynamoDBClient({
     endpoint: process.env.DYNAMODB_LOCAL_URL,
-    region: process.env.AWS_REGION || "us-east-1",
+    region: process.env.AWS_REGION || "ap-northeast-1",
     credentials: {
       accessKeyId: process.env.AWS_ACCESS_KEY_ID || "dummy",
       secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY || "dummy",
@@ -60,7 +60,7 @@ async function ensureUsersTable() {
 async function ensureTable({ tableName, keySchema, attributeDefinitions }) {
   const client = new DynamoDBClient({
     endpoint: process.env.DYNAMODB_LOCAL_URL,
-    region: process.env.AWS_REGION || "us-east-1",
+    region: process.env.AWS_REGION || "ap-northeast-1",
     credentials: {
       accessKeyId: process.env.AWS_ACCESS_KEY_ID || "dummy",
       secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY || "dummy",
@@ -94,10 +94,10 @@ async function ensureTable({ tableName, keySchema, attributeDefinitions }) {
   }
 }
 
-async function seedDataIfEmpty() {
+async function ensureLocalAdminOnly() {
   const client = new DynamoDBClient({
     endpoint: process.env.DYNAMODB_LOCAL_URL,
-    region: process.env.AWS_REGION || "us-east-1",
+    region: process.env.AWS_REGION || "ap-northeast-1",
     credentials: {
       accessKeyId: process.env.AWS_ACCESS_KEY_ID || "dummy",
       secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY || "dummy",
@@ -105,99 +105,32 @@ async function seedDataIfEmpty() {
   });
   const doc = DynamoDBDocumentClient.from(client);
 
-  // Seed matches
-  const matches = [
-    { matchId: "1", date: "2025/03/15 (土)", time: "14:00 キックオフ", opponent: "vs アビスパ福岡", venue: "ミクニワールドスタジアム北九州", status: "募集中", description: "九州ダービー!熱い戦いが期待される一戦です。" },
-    { matchId: "2", date: "2025/03/22 (土)", time: "15:00 キックオフ", opponent: "vs V・ファーレン長崎", venue: "ミクニワールドスタジアム北九州", status: "募集中", description: "注目の一戦。" },
-    { matchId: "3", date: "2025/04/05 (土)", time: "14:00 キックオフ", opponent: "vs ロアッソ熊本", venue: "ミクニワールドスタジアム北九州", status: "募集中", description: "ホームの声援で勝利を。" },
-    { matchId: "4", date: "2025/04/19 (土)", time: "15:00 キックオフ", opponent: "vs サガン鳥栖", venue: "ミクニワールドスタジアム北九州", status: "募集中", description: "白熱の九州対決。" },
-  ];
-  const existMatches = await doc.send(new ScanCommand({ TableName: MATCHES_TABLE }));
-  if ((existMatches.Items || []).length === 0) {
-    for (const m of matches) await doc.send(new PutCommand({ TableName: MATCHES_TABLE, Item: m }));
-    console.log("🌱 Seeded Matches");
-  }
+  // Always ensure local admin account exists using env credentials
+  try {
+    const adminEmail = process.env.ADMIN_EMAIL || "admin";
+    const adminPassword = process.env.ADMIN_PASSWORD;
+    if (!adminPassword) {
+      console.warn("⚠️  ADMIN_PASSWORD is not set; skipping local admin ensure");
+      return;
+    }
 
-  // Seed users (candidates)
-  const existingUsers = await doc.send(new ScanCommand({ TableName: USERS_TABLE }));
-  if ((existingUsers.Items || []).length === 0) {
-    const users = [
-      {
-        userId: "admin",
-        name: "管理者",
-        passwordHash: bcrypt.hashSync("admin1234", 10),
-        isAdmin: true,
-        createdAt: new Date().toISOString()
-      },
-      {
-        userId: "demo",
-        name: "Demo User",
-        passwordHash: bcrypt.hashSync("demo1234", 10),
-        isAdmin: false,
-        createdAt: new Date().toISOString()
-      },
-      {
-        userId: "partner1",
-        name: "サッカー太郎",
-        nickname: "サッカー太郎",
-        icon: "⚽",
-        style: "声出し応援",
-        seat: "ゴール裏",
-        trustScore: 4.8,
-        matchRate: 95,
-        bio: "毎試合欠かさず応援しています!",
-        isCandidate: true,
-      },
-      {
-        userId: "partner2",
-        name: "応援花子",
-        nickname: "応援花子",
-        icon: "🎺",
-        style: "声出し応援",
-        seat: "ゴール裏",
-        trustScore: 4.6,
-        matchRate: 88,
-        bio: "一緒に盛り上がりましょう!",
-        isCandidate: true,
-      },
-      {
-        userId: "partner3",
-        name: "ギラサポ次郎",
-        nickname: "ギラサポ次郎",
-        icon: "🔥",
-        style: "声出し応援",
-        seat: "ゴール裏",
-        trustScore: 4.9,
-        matchRate: 92,
-        bio: "熱く応援したい方歓迎!",
-        isCandidate: true,
-      },
-    ];
-    for (const u of users) await doc.send(new PutCommand({ TableName: USERS_TABLE, Item: u }));
-    console.log("🌱 Seeded Users");
-  }
-
-  // Seed chats and messages
-  const chats = [
-    { chatId: "1", matchId: "1", participants: ["demo", "partner1"], partner: { id: "partner1", name: "サッカー太郎", icon: "⚽" } },
-    { chatId: "2", matchId: "2", participants: ["demo", "partner2"], partner: { id: "partner2", name: "応援花子", icon: "🎺" } },
-    { chatId: "3", matchId: "3", participants: ["demo", "partner3"], partner: { id: "partner3", name: "ギラサポ次郎", icon: "🔥" } },
-  ];
-  const existChats = await doc.send(new ScanCommand({ TableName: CHATS_TABLE }));
-  if ((existChats.Items || []).length === 0) {
-    for (const c of chats) await doc.send(new PutCommand({ TableName: CHATS_TABLE, Item: c }));
-    console.log("🌱 Seeded Chats");
-  }
-
-  const initialMessages = [
-    { chatId: "1", messageId: "1", senderId: "partner1", text: "はじめまして!一緒に観戦できるの楽しみです!", createdAt: new Date().toISOString() },
-    { chatId: "1", messageId: "2", senderId: "demo", text: "こちらこそよろしくお願いします!", createdAt: new Date().toISOString() },
-    { chatId: "1", messageId: "3", senderId: "partner1", text: "待ち合わせ場所はどこがいいですか?", createdAt: new Date().toISOString() },
-  ];
-  const existMsgs = await doc.send(new ScanCommand({ TableName: MESSAGES_TABLE }));
-  if ((existMsgs.Items || []).length === 0) {
-    for (const m of initialMessages) await doc.send(new PutCommand({ TableName: MESSAGES_TABLE, Item: m }));
-    console.log("🌱 Seeded Messages");
+    const { Item: adminItem } = await doc.send(
+      new GetCommand({ TableName: USERS_TABLE, Key: { userId: adminEmail } })
+    );
+    const ensuredAdmin = {
+      userId: adminEmail,
+      name: adminItem?.name || "管理者",
+      passwordHash: bcrypt.hashSync(adminPassword, 10),
+      isAdmin: true,
+      createdAt: adminItem?.createdAt || new Date().toISOString(),
+      // keep existing flags if present
+      suspended: adminItem?.suspended || false,
+      deleted: adminItem?.deleted || false,
+    };
+    await doc.send(new PutCommand({ TableName: USERS_TABLE, Item: ensuredAdmin }));
+    console.log(`🔐 Ensured local admin account (${adminEmail})`);
+  } catch (e) {
+    console.warn("⚠️  Failed ensuring local admin account", e?.message || e);
   }
 }
 
@@ -210,7 +143,7 @@ async function seedDataIfEmpty() {
       try {
         const client = new DynamoDBClient({
           endpoint: process.env.DYNAMODB_LOCAL_URL,
-          region: process.env.AWS_REGION || "us-east-1",
+          region: process.env.AWS_REGION || "ap-northeast-1",
           credentials: {
             accessKeyId: process.env.AWS_ACCESS_KEY_ID || "dummy",
             secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY || "dummy",
@@ -278,6 +211,8 @@ async function seedDataIfEmpty() {
       attributeDefinitions: [{ AttributeName: "reportId", AttributeType: "S" }],
       keySchema: [{ AttributeName: "reportId", KeyType: "HASH" }],
     });
+    await ensureLocalAdminOnly();
+
     await ensureTable({
       tableName: RECRUITMENTS_TABLE,
       attributeDefinitions: [{ AttributeName: "id", AttributeType: "S" }],
@@ -288,7 +223,6 @@ async function seedDataIfEmpty() {
       attributeDefinitions: [{ AttributeName: "id", AttributeType: "S" }],
       keySchema: [{ AttributeName: "id", KeyType: "HASH" }],
     });
-    await seedDataIfEmpty();
   }
   app.listen(port, () => {
     console.log(`🚀 Local API running at http://localhost:${port}`);

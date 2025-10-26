@@ -1,0 +1,96 @@
+name: Deploy API
+
+on:
+  push:
+    branches: [main, develop]
+  workflow_dispatch:
+    inputs:
+      stage:
+        description: "Stage to deploy (dev/prod)"
+        required: true
+        default: dev
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: hakkutsu-api
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install deps
+        run: npm install
+
+      - name: Determine stage
+        id: stg
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            STAGE='${{ github.event.inputs.stage }}'
+          else
+            if [ "${{ github.ref_name }}" = "main" ]; then STAGE='prod'; else STAGE='dev'; fi
+          fi
+          echo "stage=$STAGE" >> $GITHUB_OUTPUT
+          if [ "$STAGE" = "prod" ]; then
+            echo "stack_name=hakkutsu-api-prod" >> $GITHUB_OUTPUT
+            if [ -z "${{ secrets.PROD_ALLOWED_ORIGINS }}" ]; then
+              echo "allowed=https://hakkutsu-app.vercel.app" >> $GITHUB_OUTPUT
+            else
+              echo "allowed=${{ secrets.PROD_ALLOWED_ORIGINS }}" >> $GITHUB_OUTPUT
+            fi
+            echo "jwt=${{ secrets.PROD_JWT_SECRET }}" >> $GITHUB_OUTPUT
+          else
+            echo "stack_name=hakkutsu-api-dev" >> $GITHUB_OUTPUT
+            if [ -z "${{ secrets.DEV_ALLOWED_ORIGINS }}" ]; then
+              echo "allowed=http://localhost:3000,https://hakkutsu-app-taiyoyamada-tai09to06y-3264s-projects.vercel.app" >> $GITHUB_OUTPUT
+            else
+              echo "allowed=${{ secrets.DEV_ALLOWED_ORIGINS }}" >> $GITHUB_OUTPUT
+            fi
+            echo "jwt=${{ secrets.DEV_JWT_SECRET }}" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ secrets.AWS_REGION || 'ap-northeast-1' }}
+
+      - name: Setup AWS SAM CLI
+        uses: aws-actions/setup-sam@v2
+
+      - name: SAM build
+        run: sam build
+
+      - name: SAM deploy
+        env:
+          STACK_NAME: ${{ steps.stg.outputs.stack_name }}
+          STAGE: ${{ steps.stg.outputs.stage }}
+          ALLOWED: ${{ steps.stg.outputs.allowed }}
+          JWT_SECRET: ${{ steps.stg.outputs.jwt || 'change-me-in-prod' }}
+        run: |
+          sam deploy \
+            --stack-name "$STACK_NAME" \
+            --no-confirm-changeset \
+            --no-fail-on-empty-changeset \
+            --capabilities CAPABILITY_IAM \
+            --parameter-overrides \
+              StageName="$STAGE" \
+              AllowedOrigins="${ALLOWED:-http://localhost:3000}" \
+              JwtSecret="${JWT_SECRET}"
+
+      - name: Export ApiUrl
+        id: api
+        env:
+          STACK_NAME: ${{ steps.stg.outputs.stack_name }}
+        run: |
+          URL=$(aws cloudformation describe-stacks --stack-name "$STACK_NAME" \
+            --query "Stacks[0].Outputs[?OutputKey=='ApiUrl'].OutputValue" --output text)
+          echo "url=$URL" >> $GITHUB_OUTPUT
+          echo "ApiUrl: $URL"

@@ -4,21 +4,19 @@ services:
     ports:
       - "4000:4000"
     environment:
-      - USERS_TABLE=users-table-dev
-      - MATCHES_TABLE=matches-table-dev
-      - CHATS_TABLE=chats-table-dev
-      - MESSAGES_TABLE=messages-table-dev
-      - CHECKINS_TABLE=checkins-table-dev
-      - REVIEWS_TABLE=reviews-table-dev
-      - REPORTS_TABLE=reports-table-dev
-      - RECRUITMENTS_TABLE=recruitments-table-dev
-      - REQUESTS_TABLE=requests-table-dev
-      - JWT_SECRET=dev-secret
-      - ALLOWED_ORIGINS=http://localhost:3000,http://localhost:3002
-      - DYNAMODB_LOCAL_URL=http://dynamodb:8000
-      - AWS_ACCESS_KEY_ID=dummy
-      - AWS_SECRET_ACCESS_KEY=dummy
-      - AWS_REGION=us-east-1
+      - USERS_TABLE=${USERS_TABLE:-users-table-dev}
+      - MATCHES_TABLE=${MATCHES_TABLE:-matches-table-dev}
+      - CHATS_TABLE=${CHATS_TABLE:-chats-table-dev}
+      - MESSAGES_TABLE=${MESSAGES_TABLE:-messages-table-dev}
+      - CHECKINS_TABLE=${CHECKINS_TABLE:-checkins-table-dev}
+      - REVIEWS_TABLE=${REVIEWS_TABLE:-reviews-table-dev}
+      - REPORTS_TABLE=${REPORTS_TABLE:-reports-table-dev}
+      - JWT_SECRET=${JWT_SECRET:-dev-secret}
+      - ALLOWED_ORIGINS=${ALLOWED_ORIGINS:-http://localhost:3000}
+      - DYNAMODB_LOCAL_URL=${DYNAMODB_LOCAL_URL:-http://dynamodb:8000}
+      - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID:-dummy}
+      - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY:-dummy}
+      - AWS_REGION=${AWS_REGION:-ap-northeast-1}
     depends_on:
       - dynamodb
     restart: on-failure

@@ -2,9 +2,10 @@
 
 import Link from "next/link";
 import { useParams } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import AuthGuard from "@/components/AuthGuard";
 import { useAuth } from "@/lib/auth";
+import { apiBase } from "@/lib/apiBase";
 
 const templates = [
   "今日はありがとうございました!",
@@ -21,28 +22,53 @@ export default function ReviewPage() {
   const [rating, setRating] = useState(0);
   const [message, setMessage] = useState("");
   const [submitted, setSubmitted] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [match, setMatch] = useState<{ id: string; date?: string; opponent?: string; venue?: string } | null>(null);
+  const [partner, setPartner] = useState<{ id: string; name?: string; icon?: string } | null>(null);
 
-  // モックデータ
-  const match = {
-    id: matchId,
-    date: "2025/03/15 (土)",
-    opponent: "vs アビスパ福岡",
-    partner: {
-      id: 1,
-      name: "サッカー太郎",
-      icon: "⚽",
-    },
-  };
+  useEffect(() => {
+    const load = async () => {
+      try {
+        const base = apiBase();
+        // 試合詳細
+        const resMatch = await fetch(`${base}/matches/${matchId}`);
+        if (resMatch.ok) {
+          const m = await resMatch.json();
+          setMatch({ id: String(m.matchId), date: m.date, opponent: m.opponent, venue: m.venue });
+        }
+        // チャットから同行者を特定
+        if (token) {
+          const resChats = await fetch(`${base}/chats`, { headers: { Authorization: `Bearer ${token}` } });
+          if (resChats.ok) {
+            const chats = await resChats.json();
+            const chat = (chats || []).find((c: { matchId?: string | number; partner?: { id?: string; name?: string; icon?: string } }) => String(c.matchId) === String(matchId));
+            if (chat?.partner?.id) setPartner(chat.partner);
+          }
+        }
+      } catch (err) {
+        console.error(err);
+        setError("データの取得に失敗しました");
+      } finally {
+        setLoading(false);
+      }
+    };
+    load();
+  }, [matchId, token]);
 
   const handleSubmit = async () => {
     if (rating > 0) {
-      const base = process.env.NEXT_PUBLIC_API_URL;
+      const base = apiBase();
+      if (!partner?.id) {
+        setError("同行者情報が見つかりません");
+        return;
+      }
       await fetch(`${base}/reviews`, {
         method: "POST",
         headers: { "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}) },
         body: JSON.stringify({
           matchId,
-          partnerId: match.partner.id,
+          partnerId: partner.id,
           rating,
           message,
           userId: userId || "",
@@ -51,6 +77,14 @@ export default function ReviewPage() {
       setSubmitted(true);
     }
   };
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-gradient-to-b from-yellow-400 via-yellow-300 to-white flex items-center justify-center">
+        <p className="text-gray-800">読み込み中...</p>
+      </div>
+    );
+  }
 
   if (submitted) {
     return (
@@ -92,7 +126,7 @@ export default function ReviewPage() {
                 評価を送信しました!
               </h2>
               <p className="text-gray-700 mb-8">
-                {match.partner.name}さんへの感謝の気持ちが届きました。
+                {(partner?.name ?? "同行者")}さんへの感謝の気持ちが届きました。
                 <br />
                 また一緒にギラヴァンツを応援しましょう!
               </p>
@@ -145,6 +179,11 @@ export default function ReviewPage() {
       {/* メインコンテンツ */}
       <main className="py-12 px-6">
         <div className="max-w-4xl mx-auto">
+          {error && (
+            <div className="bg-red-100 border border-red-300 text-red-800 px-4 py-3 rounded mb-4">
+              {error}
+            </div>
+          )}
           <Link
             href="/check-in"
             className="inline-flex items-center gap-2 text-gray-700 hover:text-black mb-6"
@@ -159,17 +198,17 @@ export default function ReviewPage() {
                 試合お疲れ様でした!
               </h2>
               <p className="text-gray-600">
-                {match.date} {match.opponent}
+                {match?.date} {match?.opponent}
               </p>
             </div>
 
             {/* 同行者情報 */}
             <div className="bg-yellow-50 rounded-lg p-6 mb-8 text-center">
               <p className="text-sm text-gray-600 mb-3">同行者への評価</p>
-              <div className="flex items-center justify-center gap-3 mb-2">
-                <div className="text-4xl">{match.partner.icon}</div>
+                <div className="flex items-center justify-center gap-3 mb-2">
+                <div className="text-4xl">{partner?.icon || "🙂"}</div>
                 <h3 className="text-2xl font-bold text-black">
-                  {match.partner.name}
+                  {partner?.name || "同行者"}
                 </h3>
               </div>
             </div>
@@ -236,7 +275,7 @@ export default function ReviewPage() {
               評価を送信
             </button>
             <p className="text-center text-sm text-gray-600 mt-4">
-              ※評価は{match.partner.name}さんの信頼スコアに反映されます
+              ※評価は{partner?.name || "同行者"}さんの信頼スコアに反映されます
             </p>
           </div>
         </div>

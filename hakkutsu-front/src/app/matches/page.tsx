@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
+import { apiBase } from "@/lib/apiBase";
 
 type Match = {
   matchId: string;
@@ -20,7 +21,7 @@ export default function MatchesPage() {
   useEffect(() => {
     const load = async () => {
       try {
-        const base = process.env.NEXT_PUBLIC_API_URL;
+        const base = apiBase();
         const res = await fetch(`${base}/matches`);
 
         if (!res.ok) {
@@ -96,16 +97,7 @@ export default function MatchesPage() {
                     </div>
                     <div className="text-4xl">⚽</div>
                   </div>
-                  <div className="flex gap-4 pt-4 border-t border-gray-200">
-                    <div className="flex-1 text-center">
-                      <p className="text-sm text-gray-600">募集中</p>
-                      <p className="text-xl font-bold text-red-600">12人</p>
-                    </div>
-                    <div className="flex-1 text-center">
-                      <p className="text-sm text-gray-600">参加希望</p>
-                      <p className="text-xl font-bold text-yellow-600">8人</p>
-                    </div>
-                  </div>
+                  {/* DBに存在しない架空カウント表示は削除 */}
                 </div>
               </Link>
             ))}

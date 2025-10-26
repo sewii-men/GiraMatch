@@ -1,5 +1,23 @@
 This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
 
+## API Base URL (local/dev/prod)
+
+This app uses a single environment variable to choose the backend API:
+
+- `NEXT_PUBLIC_API_URL` — Base URL for the API (client-side). Examples:
+  - Local: `http://localhost:4000` (Docker Compose API)
+  - Dev/Staging: e.g. `https://your-dev-api.example.com`
+  - Production: e.g. `https://api.example.com`
+
+Set it via environment files:
+
+- Copy one of the examples and adjust:
+  - `.env.local.example` ⇒ `.env.local` (local development)
+  - `.env.development.example` ⇒ `.env.development` (shared dev/staging)
+  - `.env.production.example` ⇒ `.env.production` (production)
+
+If `NEXT_PUBLIC_API_URL` is not set and you open the app on `localhost`, the app defaults to `http://localhost:4000` automatically. In other environments, the variable is required.
+
 ## Getting Started
 
 First, run the development server:

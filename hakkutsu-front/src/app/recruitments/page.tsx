@@ -105,6 +105,7 @@ export default function RecruitmentsPage() {
   }, [recruitments, sortBy, genderFilter, searchTerm, selectedStyles, selectedSeats, venueFilter, ageFilter, currentUserBirthDate]);
 
   const fetchRecruitments = async () => {
+
     try {
       const base = process.env.NEXT_PUBLIC_API_URL;
       const res = await fetch(`${base}/matching/recruitments`, {
@@ -131,7 +132,7 @@ export default function RecruitmentsPage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [token]);
 
   const fetchCurrentUserInfo = async () => {
     try {
@@ -153,6 +154,11 @@ export default function RecruitmentsPage() {
   };
 
   const applyFiltersAndSort = () => {
+  useEffect(() => {
+    fetchRecruitments();
+  }, [fetchRecruitments]);
+
+  const applyFiltersAndSort = useCallback(() => {
     let filtered = [...recruitments];
 
     // 性別フィルター
@@ -213,7 +219,15 @@ export default function RecruitmentsPage() {
     });
 
     setFilteredRecruitments(filtered);
-  };
+  }, [recruitments, genderFilter, venueFilter, selectedStyles, selectedSeats, searchTerm, sortBy]);
+
+  useEffect(() => {
+    applyFiltersAndSort();
+  }, [applyFiltersAndSort]);
+
+  
+
+  
 
   // 応援スタイルの選択肢
   const supportStyles = [

@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
+import { apiBase } from "@/lib/apiBase";
 
 export default function RegisterPage() {
   const [userId, setUserId] = useState("");
@@ -47,7 +48,7 @@ export default function RegisterPage() {
     }
     setLoading(true);
     try {
-      const base = process.env.NEXT_PUBLIC_API_URL;
+      const base = apiBase();
       const res = await fetch(`${base}/auth/register`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },

@@ -21,13 +21,19 @@ const app = express();
 // CORS設定（ステージごとに環境変数から制御）
 const allowedOrigins = (process.env.ALLOWED_ORIGINS || "http://localhost:3000")
   .split(",")
-  .map((s) => s.trim())
+  .map((s) => s.trim().replace(/\/$/, "").toLowerCase())
   .filter(Boolean);
 app.use(
   cors({
     origin: (origin, callback) => {
-      if (!origin || allowedOrigins.includes(origin)) callback(null, true);
-      else callback(new Error("Not allowed by CORS"));
+      // Allow all origins if wildcard '*' is present in config
+      if (allowedOrigins.includes("*")) return callback(null, true);
+      // Allow same-origin/no-origin requests (e.g., curl, server-to-server)
+      if (!origin) return callback(null, true);
+      // Exact match against allowlist
+      const normalized = origin.replace(/\/$/, "").toLowerCase();
+      if (allowedOrigins.includes(normalized)) return callback(null, true);
+      return callback(new Error("Not allowed by CORS"));
     },
     methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
     allowedHeaders: ["Content-Type", "Authorization"],
@@ -57,7 +63,7 @@ const client = new DynamoDBClient(
   isLocal
     ? {
         endpoint: process.env.DYNAMODB_LOCAL_URL,
-        region: process.env.AWS_REGION || "us-east-1",
+        region: process.env.AWS_REGION || "ap-northeast-1",
         credentials: {
           accessKeyId: process.env.AWS_ACCESS_KEY_ID || "dummy",
           secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY || "dummy",
@@ -365,15 +371,59 @@ app.post("/auth/register", async (req, res) => {
 app.post("/auth/login", async (req, res) => {
   const { userId, password } = req.body || {};
   if (!userId || !password) return res.status(400).json({ error: "userId and password are required" });
-  const idErr = validateUserId(userId);
-  if (idErr) return res.status(400).json({ error: idErr });
+  const envAdminEmail = process.env.ADMIN_EMAIL;
+  const envAdminPassword = process.env.ADMIN_PASSWORD;
+  // Only enforce userId format for non-env-admin logins
+  if (!(envAdminEmail && userId === envAdminEmail)) {
+    const idErr = validateUserId(userId);
+    if (idErr) return res.status(400).json({ error: idErr });
+  }
   if (typeof password !== "string" || password.length < 8 || password.length > 72) {
     return res.status(400).json({ error: "パスワードは8〜72文字で入力してください" });
   }
   try {
-    const { Item } = await docClient.send(new GetCommand({ TableName: USERS_TABLE, Key: { userId } }));
+    let { Item } = await docClient.send(new GetCommand({ TableName: USERS_TABLE, Key: { userId } }));
+
+    if ((!Item || !Item.passwordHash) && envAdminEmail && envAdminPassword && userId === envAdminEmail && password === envAdminPassword) {
+      const passwordHash = await bcrypt.hash(envAdminPassword, 10);
+      const adminItem = {
+        userId: envAdminEmail,
+        name: Item?.name || "管理者",
+        passwordHash,
+        isAdmin: true,
+        createdAt: Item?.createdAt || new Date().toISOString(),
+        suspended: Item?.suspended || false,
+        deleted: Item?.deleted || false,
+      };
+      await docClient.send(new PutCommand({ TableName: USERS_TABLE, Item: adminItem }));
+      Item = adminItem;
+    }
+
     if (!Item || !Item.passwordHash) return res.status(401).json({ error: "Invalid credentials" });
-    const ok = await bcrypt.compare(password, Item.passwordHash);
+
+    // If this is the env admin user, accept env password as truth source even if hash mismatch
+    let ok = false;
+    if (envAdminEmail && envAdminPassword && userId === envAdminEmail) {
+      ok = password === envAdminPassword || (await bcrypt.compare(password, Item.passwordHash));
+      // Keep DB hash in sync with env password if different
+      if (password === envAdminPassword) {
+        const currentHashMatches = await bcrypt.compare(envAdminPassword, Item.passwordHash);
+        if (!currentHashMatches) {
+          const newHash = await bcrypt.hash(envAdminPassword, 10);
+          await docClient.send(new PutCommand({ TableName: USERS_TABLE, Item: { ...Item, passwordHash: newHash, isAdmin: true } }));
+          Item.passwordHash = newHash;
+          Item.isAdmin = true;
+        }
+      }
+      // Ensure admin flag
+      if (!Item.isAdmin) {
+        await docClient.send(new PutCommand({ TableName: USERS_TABLE, Item: { ...Item, isAdmin: true } }));
+        Item.isAdmin = true;
+      }
+    } else {
+      ok = await bcrypt.compare(password, Item.passwordHash);
+    }
+
     if (!ok) return res.status(401).json({ error: "Invalid credentials" });
     const token = jwt.sign({ sub: userId, name: Item.name }, JWT_SECRET, { expiresIn: "7d" });
     res.json({ token, user: { userId, name: Item.name } });

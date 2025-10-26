@@ -1,0 +1,48 @@
+name: CI/CD Pipeline
+
+on:
+  push:
+    branches: [dev, main]
+  pull_request:
+    branches: [dev, main]
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      # ---- Install deps (API) ----
+      - name: Install dependencies (API)
+        working-directory: hakkutsu-api
+        run: npm install
+
+      # ---- Install deps (Front) ----
+      - name: Install dependencies (Front)
+        working-directory: hakkutsu-front
+        run: npm install
+
+      # ---- Lint & Test (API) ----
+      - name: Lint & Test (API)
+        working-directory: hakkutsu-api
+        run: |
+          npm run lint --if-present
+          npm test --if-present
+
+      # ---- Lint & Test (Front) ----
+      - name: Lint & Test (Front)
+        working-directory: hakkutsu-front
+        run: |
+          npm run lint --if-present
+          npm test --if-present
+
+      # Deploymentは別ワークフローが担当
+      # - .github/workflows/deploy-api.yml (AWS SAM)
+      # - .github/workflows/deploy-front.yml (Vercel)

@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
+import { apiBase } from "@/lib/apiBase";
 
 export default function LoginPage() {
   const [userId, setUserId] = useState("");
@@ -24,7 +25,7 @@ export default function LoginPage() {
     }
     setLoading(true);
     try {
-      const base = process.env.NEXT_PUBLIC_API_URL;
+      const base = apiBase();
       const res = await fetch(`${base}/auth/login`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -56,7 +57,7 @@ export default function LoginPage() {
               className="w-full border-2 border-gray-300 rounded-lg px-4 py-2 focus:outline-none focus:border-yellow-400 text-black"
               value={userId}
               onChange={(e) => setUserId(e.target.value)}
-              placeholder="demo"
+              placeholder="your-id"
               required
             />
           </div>
@@ -67,7 +68,7 @@ export default function LoginPage() {
               className="w-full border-2 border-gray-300 rounded-lg px-4 py-2 focus:outline-none focus:border-yellow-400 text-black"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              placeholder="demo1234"
+              placeholder="8文字以上"
               required
             />
           </div>

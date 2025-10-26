@@ -1,0 +1,175 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: Express on AWS Lambda (no Serverless Framework)
+
+Parameters:
+  StageName:
+    Type: String
+    Default: dev
+    Description: Deployment stage name (used in table names)
+  AllowedOrigins:
+    Type: CommaDelimitedList
+    Default: "http://localhost:3000,https://hakkutsu-app.vercel.app,https://hakkutsu-app-taiyoyamada-tai09to06y-3264s-projects.vercel.app"
+    Description: CORS allowed origins for the HTTP API (comma-separated)
+  JwtSecret:
+    Type: String
+    Default: change-me-in-prod
+    Description: JWT secret for signing tokens
+
+Globals:
+  Function:
+    Runtime: nodejs20.x
+    Timeout: 30
+    MemorySize: 512
+
+Resources:
+  HttpApi:
+    Type: AWS::Serverless::HttpApi
+    Properties:
+      CorsConfiguration:
+        AllowMethods: [OPTIONS, GET, POST, PUT, DELETE]
+        AllowHeaders: [Content-Type, Authorization]
+        AllowOrigins: !Ref AllowedOrigins
+
+  ExpressFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: ./
+      Handler: handler.handler
+      Events:
+        Root:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref HttpApi
+            Path: /
+            Method: ANY
+        Proxy:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref HttpApi
+            Path: /{proxy+}
+            Method: ANY
+      Environment:
+        Variables:
+          USERS_TABLE: !Ref UsersTable
+          MATCHES_TABLE: !Ref MatchesTable
+          CHATS_TABLE: !Ref ChatsTable
+          MESSAGES_TABLE: !Ref MessagesTable
+          CHECKINS_TABLE: !Ref CheckinsTable
+          REVIEWS_TABLE: !Ref ReviewsTable
+          REPORTS_TABLE: !Ref ReportsTable
+          JWT_SECRET: !Ref JwtSecret
+          # ALLOWED_ORIGINS can be passed as a CSV env var if needed
+          ALLOWED_ORIGINS: !Join [',', !Ref AllowedOrigins]
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref UsersTable
+        - DynamoDBCrudPolicy:
+            TableName: !Ref MatchesTable
+        - DynamoDBCrudPolicy:
+            TableName: !Ref ChatsTable
+        - DynamoDBCrudPolicy:
+            TableName: !Ref MessagesTable
+        - DynamoDBCrudPolicy:
+            TableName: !Ref CheckinsTable
+        - DynamoDBCrudPolicy:
+            TableName: !Ref ReviewsTable
+        - DynamoDBCrudPolicy:
+            TableName: !Ref ReportsTable
+
+  UsersTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub users-table-${StageName}
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: userId
+          AttributeType: S
+      KeySchema:
+        - AttributeName: userId
+          KeyType: HASH
+
+  MatchesTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub matches-table-${StageName}
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: matchId
+          AttributeType: S
+      KeySchema:
+        - AttributeName: matchId
+          KeyType: HASH
+
+  ChatsTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub chats-table-${StageName}
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: chatId
+          AttributeType: S
+      KeySchema:
+        - AttributeName: chatId
+          KeyType: HASH
+
+  MessagesTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub messages-table-${StageName}
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: chatId
+          AttributeType: S
+        - AttributeName: messageId
+          AttributeType: S
+      KeySchema:
+        - AttributeName: chatId
+          KeyType: HASH
+        - AttributeName: messageId
+          KeyType: RANGE
+
+  CheckinsTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub checkins-table-${StageName}
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: matchId
+          AttributeType: S
+        - AttributeName: userId
+          AttributeType: S
+      KeySchema:
+        - AttributeName: matchId
+          KeyType: HASH
+        - AttributeName: userId
+          KeyType: RANGE
+
+  ReviewsTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub reviews-table-${StageName}
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: reviewId
+          AttributeType: S
+      KeySchema:
+        - AttributeName: reviewId
+          KeyType: HASH
+
+  ReportsTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub reports-table-${StageName}
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: reportId
+          AttributeType: S
+      KeySchema:
+        - AttributeName: reportId
+          KeyType: HASH
+
+Outputs:
+  ApiUrl:
+    Description: HTTPS endpoint for the Express API
+    Value: !Sub https://${HttpApi}.execute-api.${AWS::Region}.amazonaws.com

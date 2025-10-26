@@ -1,7 +1,8 @@
 "use client";
 
 import { useParams, useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
+import { apiBase } from "@/lib/apiBase";
 
 interface Match {
   matchId: string;
@@ -28,14 +29,9 @@ export default function MatchDetail() {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
 
-  useEffect(() => {
-    fetchMatch();
-    fetchStats();
-  }, [matchId]);
-
-  const fetchMatch = async () => {
+  const fetchMatch = useCallback(async () => {
     try {
-      const base = process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000";
+      const base = apiBase();
       const res = await fetch(`${base}/matches/${matchId}`);
 
       if (!res.ok) throw new Error("試合情報の取得に失敗しました");
@@ -48,11 +44,11 @@ export default function MatchDetail() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [matchId]);
 
-  const fetchStats = async () => {
+  const fetchStats = useCallback(async () => {
     try {
-      const base = process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000";
+      const base = apiBase();
       const token = localStorage.getItem("token");
 
       const res = await fetch(`${base}/admin/matches/${matchId}/stats`, {
@@ -66,7 +62,12 @@ export default function MatchDetail() {
     } catch (err) {
       console.error(err);
     }
-  };
+  }, [matchId]);
+
+  useEffect(() => {
+    fetchMatch();
+    fetchStats();
+  }, [fetchMatch, fetchStats]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -76,7 +77,7 @@ export default function MatchDetail() {
     setError("");
 
     try {
-      const base = process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000";
+      const base = apiBase();
       const token = localStorage.getItem("token");
 
       const res = await fetch(`${base}/admin/matches/${matchId}`, {

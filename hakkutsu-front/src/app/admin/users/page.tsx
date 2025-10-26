@@ -1,7 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
+import { apiBase } from "@/lib/apiBase";
 
 interface User {
   userId: string;
@@ -24,35 +25,7 @@ export default function UsersAdmin() {
     fetchUsers();
   }, []);
 
-  useEffect(() => {
-    applyFilters();
-  }, [searchTerm, filterStatus, users]);
-
-  const fetchUsers = async () => {
-    try {
-      const base = process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000";
-      const token = localStorage.getItem("token");
-
-      const res = await fetch(`${base}/admin/users`, {
-        headers: token ? { Authorization: `Bearer ${token}` } : {},
-      });
-
-      if (!res.ok) throw new Error("ユーザー一覧の取得に失敗しました");
-
-      const data = await res.json();
-      console.log("取得したユーザーデータ:", data);
-      console.log("最初のユーザー:", data[0]);
-      setUsers(data);
-      setFilteredUsers(data);
-    } catch (err) {
-      console.error(err);
-      setError(err instanceof Error ? err.message : "エラーが発生しました");
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const applyFilters = () => {
+  const applyFilters = useCallback(() => {
     let filtered = [...users];
 
     // 検索フィルター
@@ -75,7 +48,37 @@ export default function UsersAdmin() {
     }
 
     setFilteredUsers(filtered);
+  }, [users, searchTerm, filterStatus]);
+
+  useEffect(() => {
+    applyFilters();
+  }, [applyFilters]);
+
+  const fetchUsers = async () => {
+    try {
+      const base = apiBase();
+      const token = localStorage.getItem("token");
+
+      const res = await fetch(`${base}/admin/users`, {
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      });
+
+      if (!res.ok) throw new Error("ユーザー一覧の取得に失敗しました");
+
+      const data = await res.json();
+      console.log("取得したユーザーデータ:", data);
+      console.log("最初のユーザー:", data[0]);
+      setUsers(data);
+      setFilteredUsers(data);
+    } catch (err) {
+      console.error(err);
+      setError(err instanceof Error ? err.message : "エラーが発生しました");
+    } finally {
+      setLoading(false);
+    }
   };
+
+  
 
   if (loading) {
     return <div className="text-white text-xl">読み込み中...</div>;

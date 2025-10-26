@@ -5,6 +5,7 @@ import { useParams } from "next/navigation";
 import { useEffect, useState } from "react";
 import AuthGuard from "@/components/AuthGuard";
 import { useAuth } from "@/lib/auth";
+import { apiBase } from "@/lib/apiBase";
 
 type Message = { messageId: string; senderId: string; text: string; createdAt: string };
 type Partner = { id: string; name: string; icon?: string };
@@ -29,7 +30,7 @@ export default function ChatDetailPage() {
 
   useEffect(() => {
     const load = async () => {
-      const base = process.env.NEXT_PUBLIC_API_URL;
+      const base = apiBase();
       const res = await fetch(`${base}/chats/${chatId}`, {
         headers: token ? { Authorization: `Bearer ${token}` } : undefined,
       });
@@ -51,7 +52,7 @@ export default function ChatDetailPage() {
   const handleSend = () => {
     if (newMessage.trim()) {
       (async () => {
-        const base = process.env.NEXT_PUBLIC_API_URL;
+        const base = apiBase();
         const res = await fetch(`${base}/chats/${chatId}/messages`, {
           method: "POST",
           headers: { "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}) },
@@ -121,17 +122,17 @@ export default function ChatDetailPage() {
           {messages.map((message) => (
             <div
               key={message.messageId}
-              className={`flex ${message.senderId === "demo" ? "justify-end" : "justify-start"}`}
+              className={`flex ${message.senderId === (userId || "") ? "justify-end" : "justify-start"}`}
             >
               <div
                 className={`max-w-md px-4 py-3 rounded-lg ${
-                  message.senderId === "demo"
+                  message.senderId === (userId || "")
                     ? "bg-yellow-400 text-black"
                     : "bg-white text-black border-2 border-gray-200"
                 }`}
               >
                 <p className="mb-1">{message.text}</p>
-                <p className={`text-xs ${message.senderId === "demo" ? "text-gray-700" : "text-gray-500"}`}>
+                <p className={`text-xs ${message.senderId === (userId || "") ? "text-gray-700" : "text-gray-500"}`}>
                   {new Date(message.createdAt).toLocaleTimeString("ja-JP", { hour: "2-digit", minute: "2-digit" })}
                 </p>
               </div>

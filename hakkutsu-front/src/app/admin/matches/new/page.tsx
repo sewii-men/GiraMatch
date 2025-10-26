@@ -2,6 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useState } from "react";
+import { apiBase } from "@/lib/apiBase";
 
 export default function NewMatch() {
   const router = useRouter();
@@ -22,7 +23,7 @@ export default function NewMatch() {
     setError("");
 
     try {
-      const base = process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000";
+      const base = apiBase();
       const token = localStorage.getItem("token");
 
       const res = await fetch(`${base}/admin/matches`, {
