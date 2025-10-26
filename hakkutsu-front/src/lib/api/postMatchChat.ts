@@ -52,8 +52,20 @@ interface BackendChatResponse {
   };
 }
 
+interface BackendRestaurant {
+  restaurantId: string;
+  name: string;
+  address: string;
+  imageUrl: string;
+  googleMapUrl: string;
+  latitude: number;
+  longitude: number;
+  category: string;
+  distance?: number;
+}
+
 // バックエンドのRestaurant形式をフロントエンドの形式に変換
-function mapRestaurant(backendRestaurant: any): Restaurant {
+function mapRestaurant(backendRestaurant: BackendRestaurant): Restaurant {
   return {
     restaurantId: backendRestaurant.restaurantId,
     name: backendRestaurant.name,
@@ -196,8 +208,8 @@ export async function fetchRestaurantShares(chatId: string): Promise<{ restauran
 
   // バックエンドのレスポンス形式: { shares: [{ restaurant: {...}, shareCount: number, lastSharedAt: string }], totalShares: number }
   // フロントエンドの期待形式: { restaurantId: string; count: number }[]
-  return (data.shares || []).map((share: any) => ({
-    restaurantId: share.restaurant?.restaurantId || share.restaurantId,
-    count: share.shareCount || share.count,
+  return (data.shares || []).map((share: { restaurant?: { restaurantId: string }; restaurantId?: string; shareCount?: number; count?: number }) => ({
+    restaurantId: share.restaurant?.restaurantId || share.restaurantId || '',
+    count: share.shareCount || share.count || 0,
   }));
 }

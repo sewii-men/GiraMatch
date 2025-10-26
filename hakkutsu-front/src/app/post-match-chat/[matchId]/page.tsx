@@ -340,16 +340,15 @@ function PostMatchChatPageContent({
 export default function PostMatchChatPage() {
   const params = useParams();
   const matchId = params?.matchId as string;
-  const { userId } = useAuth();
 
   return (
     <PostMatchChatProvider>
-      <PostMatchChatInitializer matchId={matchId} userId={userId || "current_user"} />
+      <PostMatchChatInitializer matchId={matchId} />
     </PostMatchChatProvider>
   );
 }
 
-function PostMatchChatInitializer({ matchId, userId }: { matchId: string; userId: string }) {
+function PostMatchChatInitializer({ matchId }: { matchId: string }) {
   const { initializeChat, chatId, clearChat } = usePostMatchChat();
   const [chatLoading, setChatLoading] = useState(true);
   const [chatError, setChatError] = useState<string | null>(null);
