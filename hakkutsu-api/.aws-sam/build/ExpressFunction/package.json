@@ -14,7 +14,11 @@
   "scripts": {
     "seed-admin": "node scripts/seed-admin.js",
     "seed-data": "node scripts/seed-data.js",
-    "start": "node local.js"
+    "migrate-users": "node scripts/migrate-users-to-email.js",
+    "start": "node local.js",
+    "dev": "node local.js",
+    "test": "echo 'No tests configured' && exit 0",
+    "lint": "echo 'No linter configured' && exit 0"
   },
   "devDependencies": {}
 }
