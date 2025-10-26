@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import { calculateAge } from "@/lib/utils";
 import GiraNomiImage from "@/images/GiraNomi.png";
+import { useAuth } from "@/lib/auth";
 
 interface Match {
   matchId: string;
@@ -84,6 +85,7 @@ interface SentRequest {
 }
 
 export default function Home() {
+  const { displayName } = useAuth();
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [loading, setLoading] = useState(true);
   const [userName, setUserName] = useState("");
@@ -129,12 +131,12 @@ export default function Home() {
 
     if (token && userId) {
       setIsLoggedIn(true);
-      setUserName(userId);
+      setUserName(displayName || userId);
       fetchDashboardData(token);
     } else {
       setLoading(false);
     }
-  }, []);
+  }, [displayName]);
 
   const handleCancelRecruitment = async (recruitmentId: string, opponent: string) => {
     const token = localStorage.getItem("token");

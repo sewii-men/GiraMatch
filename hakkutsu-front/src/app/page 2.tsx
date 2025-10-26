@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
+import { useAuth } from "@/lib/auth";
 
 interface Match {
   matchId: string;
@@ -45,6 +46,7 @@ interface Recruitment {
 }
 
 export default function Home() {
+  const { displayName } = useAuth();
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [loading, setLoading] = useState(true);
   const [userName, setUserName] = useState("");
@@ -59,12 +61,12 @@ export default function Home() {
 
     if (token && userId) {
       setIsLoggedIn(true);
-      setUserName(userId);
+      setUserName(displayName || userId);
       fetchDashboardData(token);
     } else {
       setLoading(false);
     }
-  }, []);
+  }, [displayName]);
 
   const fetchDashboardData = async (token: string) => {
     try {

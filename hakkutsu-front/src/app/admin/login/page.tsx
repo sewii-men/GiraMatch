@@ -23,7 +23,7 @@ export default function AdminLoginPage() {
       const loginRes = await fetch(`${base}/auth/login`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ userId, password }),
+        body: JSON.stringify({ email: userId, password }),
       });
 
       const loginData = await loginRes.json();
@@ -102,11 +102,10 @@ export default function AdminLoginPage() {
           <button
             type="submit"
             disabled={loading}
-            className={`w-full py-3 rounded-lg font-bold text-black transition ${
-              loading
+            className={`w-full py-3 rounded-lg font-bold text-black transition ${loading
                 ? "bg-gray-500 cursor-not-allowed"
                 : "bg-yellow-400 hover:bg-yellow-500"
-            }`}
+              }`}
           >
             {loading ? "ログイン中..." : "ログイン"}
           </button>

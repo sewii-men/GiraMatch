@@ -74,11 +74,10 @@ const client = new DynamoDBClient(
 const docClient = DynamoDBDocumentClient.from(client);
 
 // 入力バリデーション
-function validateUserId(userId) {
-  if (typeof userId !== "string") return "userId は文字列で指定してください";
-  const v = userId.trim();
-  if (v.length < 3 || v.length > 30) return "userId は3〜30文字で入力してください";
-  if (!/^[a-zA-Z0-9_-]+$/.test(v)) return "userId は英数字・_・- のみ利用できます";
+function validateEmail(email) {
+  if (typeof email !== "string") return "メールアドレスは文字列で指定してください";
+  const v = email.trim();
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v)) return "有効なメールアドレスを入力してください";
   return null;
 }
 function validateDisplayName(name) {
@@ -93,6 +92,9 @@ function validatePassword(password) {
   if (v.length < 8 || v.length > 72) return "パスワードは8〜72文字で入力してください";
   if (!/[A-Za-z]/.test(v) || !/[0-9]/.test(v)) return "パスワードには英字と数字を含めてください";
   return null;
+}
+function generateUserId() {
+  return `user-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
 }
 
 // 認証ミドルウェア
@@ -330,37 +332,39 @@ app.get("/admin/stats", requireAdmin, async (req, res) => {
 
 // 登録
 app.post("/auth/register", async (req, res) => {
-  const { userId, name, password, birthDate } = req.body || {};
-  if (!userId || !name || !password || !birthDate) return res.status(400).json({ error: "userId, name, password, birthDate are required" });
-  const idErr = validateUserId(userId);
-  if (idErr) return res.status(400).json({ error: idErr });
+  const { email, name, password } = req.body || {};
+  if (!email || !name || !password) return res.status(400).json({ error: "email, name, password are required" });
+  const emailErr = validateEmail(email);
+  if (emailErr) return res.status(400).json({ error: emailErr });
   const nameErr = validateDisplayName(name);
   if (nameErr) return res.status(400).json({ error: nameErr });
   const pwErr = validatePassword(password);
   if (pwErr) return res.status(400).json({ error: pwErr });
-  const birthDateObj = new Date(birthDate);
-  const today = new Date();
-  if (!birthDate || typeof birthDate !== "string" || isNaN(birthDateObj.getTime()) || birthDateObj > today) {
-    return res.status(400).json({ error: "有効な誕生日を入力してください" });
-  }
-  const minDate = new Date();
-  minDate.setFullYear(today.getFullYear() - 150);
-  if (birthDateObj < minDate) return res.status(400).json({ error: "誕生日が無効です" });
+
   try {
-    const exist = await docClient.send(new GetCommand({ TableName: USERS_TABLE, Key: { userId } }));
-    if (exist.Item) return res.status(409).json({ error: "User already exists" });
+    // メールアドレスの重複チェック
+    const scanResult = await docClient.send(new ScanCommand({
+      TableName: USERS_TABLE,
+      FilterExpression: "email = :email",
+      ExpressionAttributeValues: { ":email": email.trim().toLowerCase() }
+    }));
+    if (scanResult.Items && scanResult.Items.length > 0) {
+      return res.status(409).json({ error: "このメールアドレスは既に登録されています" });
+    }
+
+    const userId = generateUserId();
     const passwordHash = await bcrypt.hash(password, 10);
     const item = {
       userId,
-      name,
+      email: email.trim().toLowerCase(),
+      name: name.trim(),
       passwordHash,
-      birthDate,
-      isAdmin: false,  // デフォルトは管理者権限なし
+      isAdmin: false,
       createdAt: new Date().toISOString()
     };
     await docClient.send(new PutCommand({ TableName: USERS_TABLE, Item: item }));
-    const token = jwt.sign({ sub: userId, name }, JWT_SECRET, { expiresIn: "7d" });
-    res.json({ token, user: { userId, name } });
+    const token = jwt.sign({ sub: userId, name: item.name }, JWT_SECRET, { expiresIn: "7d" });
+    res.json({ token, user: { userId, name: item.name, email: item.email } });
   } catch (error) {
     console.error(error);
     res.status(500).json({ error: "Could not register" });
@@ -369,25 +373,38 @@ app.post("/auth/register", async (req, res) => {
 
 // ログイン
 app.post("/auth/login", async (req, res) => {
-  const { userId, password } = req.body || {};
-  if (!userId || !password) return res.status(400).json({ error: "userId and password are required" });
+  const { email, password } = req.body || {};
+  if (!email || !password) return res.status(400).json({ error: "email and password are required" });
+
   const envAdminEmail = process.env.ADMIN_EMAIL;
   const envAdminPassword = process.env.ADMIN_PASSWORD;
-  // Only enforce userId format for non-env-admin logins
-  if (!(envAdminEmail && userId === envAdminEmail)) {
-    const idErr = validateUserId(userId);
-    if (idErr) return res.status(400).json({ error: idErr });
-  }
+
+  const emailErr = validateEmail(email);
+  if (emailErr) return res.status(400).json({ error: emailErr });
+
   if (typeof password !== "string" || password.length < 8 || password.length > 72) {
     return res.status(400).json({ error: "パスワードは8〜72文字で入力してください" });
   }
-  try {
-    let { Item } = await docClient.send(new GetCommand({ TableName: USERS_TABLE, Key: { userId } }));
 
-    if ((!Item || !Item.passwordHash) && envAdminEmail && envAdminPassword && userId === envAdminEmail && password === envAdminPassword) {
+  try {
+    const normalizedEmail = email.trim().toLowerCase();
+
+    // メールアドレスでユーザーを検索
+    const scanResult = await docClient.send(new ScanCommand({
+      TableName: USERS_TABLE,
+      FilterExpression: "email = :email",
+      ExpressionAttributeValues: { ":email": normalizedEmail }
+    }));
+
+    let Item = scanResult.Items && scanResult.Items.length > 0 ? scanResult.Items[0] : null;
+
+    // 環境変数の管理者アカウントでのログイン処理
+    if ((!Item || !Item.passwordHash) && envAdminEmail && envAdminPassword && normalizedEmail === envAdminEmail.toLowerCase() && password === envAdminPassword) {
       const passwordHash = await bcrypt.hash(envAdminPassword, 10);
+      const userId = Item?.userId || generateUserId();
       const adminItem = {
-        userId: envAdminEmail,
+        userId,
+        email: normalizedEmail,
         name: Item?.name || "管理者",
         passwordHash,
         isAdmin: true,
@@ -399,13 +416,13 @@ app.post("/auth/login", async (req, res) => {
       Item = adminItem;
     }
 
-    if (!Item || !Item.passwordHash) return res.status(401).json({ error: "Invalid credentials" });
+    if (!Item || !Item.passwordHash) return res.status(401).json({ error: "メールアドレスまたはパスワードが正しくありません" });
 
-    // If this is the env admin user, accept env password as truth source even if hash mismatch
+    // 管理者アカウントの特別処理
     let ok = false;
-    if (envAdminEmail && envAdminPassword && userId === envAdminEmail) {
+    if (envAdminEmail && envAdminPassword && normalizedEmail === envAdminEmail.toLowerCase()) {
       ok = password === envAdminPassword || (await bcrypt.compare(password, Item.passwordHash));
-      // Keep DB hash in sync with env password if different
+      // パスワードハッシュを環境変数と同期
       if (password === envAdminPassword) {
         const currentHashMatches = await bcrypt.compare(envAdminPassword, Item.passwordHash);
         if (!currentHashMatches) {
@@ -415,7 +432,7 @@ app.post("/auth/login", async (req, res) => {
           Item.isAdmin = true;
         }
       }
-      // Ensure admin flag
+      // 管理者フラグを確実に設定
       if (!Item.isAdmin) {
         await docClient.send(new PutCommand({ TableName: USERS_TABLE, Item: { ...Item, isAdmin: true } }));
         Item.isAdmin = true;
@@ -424,9 +441,9 @@ app.post("/auth/login", async (req, res) => {
       ok = await bcrypt.compare(password, Item.passwordHash);
     }
 
-    if (!ok) return res.status(401).json({ error: "Invalid credentials" });
-    const token = jwt.sign({ sub: userId, name: Item.name }, JWT_SECRET, { expiresIn: "7d" });
-    res.json({ token, user: { userId, name: Item.name } });
+    if (!ok) return res.status(401).json({ error: "メールアドレスまたはパスワードが正しくありません" });
+    const token = jwt.sign({ sub: Item.userId, name: Item.name }, JWT_SECRET, { expiresIn: "7d" });
+    res.json({ token, user: { userId: Item.userId, name: Item.name, email: Item.email } });
   } catch (error) {
     console.error(error);
     res.status(500).json({ error: "Could not login" });
