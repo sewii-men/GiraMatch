@@ -125,8 +125,8 @@ export function PostMatchChatProvider({ children }: PostMatchChatProviderProps) 
 
     messages.forEach((msg) => {
       if (msg.restaurant && !msg.isDeleted) {
-        const currentCount = shareMap.get(msg.restaurant.id) || 0;
-        shareMap.set(msg.restaurant.id, currentCount + 1);
+        const currentCount = shareMap.get(msg.restaurant.restaurantId) || 0;
+        shareMap.set(msg.restaurant.restaurantId, currentCount + 1);
       }
     });
 

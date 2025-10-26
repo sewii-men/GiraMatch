@@ -131,13 +131,13 @@ export default function RestaurantMap({
 
       {/* 店舗のマーカー */}
       {restaurants.map((restaurant) => {
-        const shareCount = getShareCount(restaurant.id);
-        const scale = getMarkerScale(restaurant.id);
+        const shareCount = getShareCount(restaurant.restaurantId);
+        const scale = getMarkerScale(restaurant.restaurantId);
         const hasShares = shareCount > 0;
 
         return (
           <Marker
-            key={restaurant.id}
+            key={restaurant.restaurantId}
             position={{ lat: restaurant.latitude, lng: restaurant.longitude }}
             onClick={() => {
               setSelectedRestaurant(restaurant);
@@ -172,10 +172,10 @@ export default function RestaurantMap({
             <h3 className="font-bold text-black mb-1">{selectedRestaurant.name}</h3>
             <p className="text-sm text-gray-600 mb-2">{selectedRestaurant.address}</p>
 
-            {getShareCount(selectedRestaurant.id) > 0 && (
+            {getShareCount(selectedRestaurant.restaurantId) > 0 && (
               <div className="bg-yellow-100 px-2 py-1 rounded mb-2">
                 <p className="text-xs font-bold text-yellow-800">
-                  🍺 {getShareCount(selectedRestaurant.id)}人がここで飲んでいます！
+                  🍺 {getShareCount(selectedRestaurant.restaurantId)}人がここで飲んでいます！
                 </p>
               </div>
             )}

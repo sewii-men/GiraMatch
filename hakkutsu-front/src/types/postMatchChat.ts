@@ -1,7 +1,7 @@
 // ギラ飲みチャット機能の型定義
 
 export interface Restaurant {
-  id: string;
+  restaurantId: string;
   name: string;
   address: string;
   imageUrl: string;
