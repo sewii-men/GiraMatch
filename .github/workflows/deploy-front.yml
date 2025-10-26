@@ -93,18 +93,11 @@ jobs:
       # and rely on Vercel's remote builders during deploy.
 
       - name: Deploy
+        if: github.ref == 'refs/heads/main'
         env:
           NEXT_PUBLIC_API_URL: ${{ steps.api.outputs.url }}
         run: |
           set -euo pipefail
-          if [ -z "${NEXT_PUBLIC_API_URL:-}" ]; then
-            echo "::error::NEXT_PUBLIC_API_URL is empty. Aborting deploy."
-            exit 1
-          fi
-          if [ "${{ github.ref_name }}" = "main" ]; then
-            echo "🚀 Deploying to Production (remote build from repo root)"
-            npx vercel deploy --prod --yes --token="$VERCEL_TOKEN" ${VERCEL_SCOPE:+--scope="$VERCEL_SCOPE"} --env NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL
-          else
-            echo "🧪 Deploying to Preview (remote build from repo root)"
-            npx vercel deploy --yes --token="$VERCEL_TOKEN" ${VERCEL_SCOPE:+--scope="$VERCEL_SCOPE"} --env NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL
-          fi
+          echo "🚀 Deploying to Production (remote build from repo root)"
+          npx vercel deploy --prod --yes --token="$VERCEL_TOKEN" ${VERCEL_SCOPE:+--scope="$VERCEL_SCOPE"} --env NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL
+
