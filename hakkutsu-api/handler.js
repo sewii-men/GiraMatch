@@ -350,15 +350,59 @@ app.post("/auth/register", async (req, res) => {
 app.post("/auth/login", async (req, res) => {
   const { userId, password } = req.body || {};
   if (!userId || !password) return res.status(400).json({ error: "userId and password are required" });
-  const idErr = validateUserId(userId);
-  if (idErr) return res.status(400).json({ error: idErr });
+  const envAdminEmail = process.env.ADMIN_EMAIL;
+  const envAdminPassword = process.env.ADMIN_PASSWORD;
+  // Only enforce userId format for non-env-admin logins
+  if (!(envAdminEmail && userId === envAdminEmail)) {
+    const idErr = validateUserId(userId);
+    if (idErr) return res.status(400).json({ error: idErr });
+  }
   if (typeof password !== "string" || password.length < 8 || password.length > 72) {
     return res.status(400).json({ error: "パスワードは8〜72文字で入力してください" });
   }
   try {
-    const { Item } = await docClient.send(new GetCommand({ TableName: USERS_TABLE, Key: { userId } }));
+    let { Item } = await docClient.send(new GetCommand({ TableName: USERS_TABLE, Key: { userId } }));
+
+    if ((!Item || !Item.passwordHash) && envAdminEmail && envAdminPassword && userId === envAdminEmail && password === envAdminPassword) {
+      const passwordHash = await bcrypt.hash(envAdminPassword, 10);
+      const adminItem = {
+        userId: envAdminEmail,
+        name: Item?.name || "管理者",
+        passwordHash,
+        isAdmin: true,
+        createdAt: Item?.createdAt || new Date().toISOString(),
+        suspended: Item?.suspended || false,
+        deleted: Item?.deleted || false,
+      };
+      await docClient.send(new PutCommand({ TableName: USERS_TABLE, Item: adminItem }));
+      Item = adminItem;
+    }
+
     if (!Item || !Item.passwordHash) return res.status(401).json({ error: "Invalid credentials" });
-    const ok = await bcrypt.compare(password, Item.passwordHash);
+
+    // If this is the env admin user, accept env password as truth source even if hash mismatch
+    let ok = false;
+    if (envAdminEmail && envAdminPassword && userId === envAdminEmail) {
+      ok = password === envAdminPassword || (await bcrypt.compare(password, Item.passwordHash));
+      // Keep DB hash in sync with env password if different
+      if (password === envAdminPassword) {
+        const currentHashMatches = await bcrypt.compare(envAdminPassword, Item.passwordHash);
+        if (!currentHashMatches) {
+          const newHash = await bcrypt.hash(envAdminPassword, 10);
+          await docClient.send(new PutCommand({ TableName: USERS_TABLE, Item: { ...Item, passwordHash: newHash, isAdmin: true } }));
+          Item.passwordHash = newHash;
+          Item.isAdmin = true;
+        }
+      }
+      // Ensure admin flag
+      if (!Item.isAdmin) {
+        await docClient.send(new PutCommand({ TableName: USERS_TABLE, Item: { ...Item, isAdmin: true } }));
+        Item.isAdmin = true;
+      }
+    } else {
+      ok = await bcrypt.compare(password, Item.passwordHash);
+    }
+
     if (!ok) return res.status(401).json({ error: "Invalid credentials" });
     const token = jwt.sign({ sub: userId, name: Item.name }, JWT_SECRET, { expiresIn: "7d" });
     res.json({ token, user: { userId, name: Item.name } });

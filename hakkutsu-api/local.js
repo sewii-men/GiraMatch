@@ -105,15 +105,22 @@ async function ensureLocalAdminOnly() {
   });
   const doc = DynamoDBDocumentClient.from(client);
 
-  // Always ensure local admin account exists with known password
+  // Always ensure local admin account exists using env credentials
   try {
+    const adminEmail = process.env.ADMIN_EMAIL || "admin";
+    const adminPassword = process.env.ADMIN_PASSWORD;
+    if (!adminPassword) {
+      console.warn("⚠️  ADMIN_PASSWORD is not set; skipping local admin ensure");
+      return;
+    }
+
     const { Item: adminItem } = await doc.send(
-      new GetCommand({ TableName: USERS_TABLE, Key: { userId: "admin" } })
+      new GetCommand({ TableName: USERS_TABLE, Key: { userId: adminEmail } })
     );
     const ensuredAdmin = {
-      userId: "admin",
+      userId: adminEmail,
       name: adminItem?.name || "管理者",
-      passwordHash: bcrypt.hashSync("admin1234", 10),
+      passwordHash: bcrypt.hashSync(adminPassword, 10),
       isAdmin: true,
       createdAt: adminItem?.createdAt || new Date().toISOString(),
       // keep existing flags if present
@@ -121,7 +128,7 @@ async function ensureLocalAdminOnly() {
       deleted: adminItem?.deleted || false,
     };
     await doc.send(new PutCommand({ TableName: USERS_TABLE, Item: ensuredAdmin }));
-    console.log("🔐 Ensured local admin account (admin/admin1234)");
+    console.log(`🔐 Ensured local admin account (${adminEmail})`);
   } catch (e) {
     console.warn("⚠️  Failed ensuring local admin account", e?.message || e);
   }

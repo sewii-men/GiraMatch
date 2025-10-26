@@ -46,7 +46,13 @@ async function upsertUser({ userId, name, password, isAdmin }) {
 
 (async () => {
   try {
-    await upsertUser({ userId: "admin", name: "管理者", password: "admin1234", isAdmin: true });
+    const adminEmail = process.env.ADMIN_EMAIL || "admin";
+    const adminPassword = process.env.ADMIN_PASSWORD;
+    if (!adminPassword) {
+      console.error("ADMIN_PASSWORD env is required to seed admin user");
+      process.exit(1);
+    }
+    await upsertUser({ userId: adminEmail, name: "管理者", password: adminPassword, isAdmin: true });
     console.log("Done.");
   } catch (e) {
     console.error(e);

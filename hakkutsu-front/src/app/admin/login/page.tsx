@@ -68,13 +68,13 @@ export default function AdminLoginPage() {
 
         <form onSubmit={handleSubmit} className="space-y-6">
           <div>
-            <label className="block text-sm text-gray-300 mb-2">ユーザーID</label>
+            <label className="block text-sm text-gray-300 mb-2">メールアドレス</label>
             <input
               type="text"
               className="w-full bg-gray-700 border-2 border-gray-600 rounded-lg px-4 py-3 text-white focus:outline-none focus:border-yellow-400 transition"
               value={userId}
               onChange={(e) => setUserId(e.target.value)}
-              placeholder="admin"
+              placeholder="admin@example.com"
               required
               autoComplete="username"
             />
@@ -112,11 +112,7 @@ export default function AdminLoginPage() {
           </button>
         </form>
 
-        <div className="mt-6 text-center">
-          <p className="text-gray-500 text-xs">
-            開発用: admin / admin1234
-          </p>
-        </div>
+        {/* 管理者パスワードの表示は行いません */}
       </div>
     </div>
   );
