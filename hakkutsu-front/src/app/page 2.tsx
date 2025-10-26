@@ -2,7 +2,6 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
 
 interface Match {
   matchId: string;
@@ -53,7 +52,6 @@ export default function Home() {
   const [activeChats, setActiveChats] = useState<Chat[]>([]);
   const [pendingCheckIns, setPendingCheckIns] = useState<CheckIn[]>([]);
   const [recentRecruitments, setRecentRecruitments] = useState<Recruitment[]>([]);
-  const router = useRouter();
 
   useEffect(() => {
     const token = localStorage.getItem("token");

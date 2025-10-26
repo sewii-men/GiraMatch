@@ -1,7 +1,7 @@
 "use client";
 
 import { useParams, useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { apiBase } from "@/lib/apiBase";
 
 interface Report {
@@ -30,11 +30,7 @@ export default function ReportDetail() {
   const [error, setError] = useState("");
   const [notes, setNotes] = useState("");
 
-  useEffect(() => {
-    fetchReport();
-  }, [reportId]);
-
-  const fetchReport = async () => {
+  const fetchReport = useCallback(async () => {
     try {
       const base = apiBase();
       const token = localStorage.getItem("token");
@@ -54,7 +50,11 @@ export default function ReportDetail() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [reportId]);
+
+  useEffect(() => {
+    fetchReport();
+  }, [fetchReport]);
 
   const handleAction = async (action: string, reason?: string) => {
     if (!confirm(`この操作を実行しますか？`)) return;

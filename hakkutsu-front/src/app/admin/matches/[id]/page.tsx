@@ -1,7 +1,7 @@
 "use client";
 
 import { useParams, useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { apiBase } from "@/lib/apiBase";
 
 interface Match {
@@ -29,12 +29,7 @@ export default function MatchDetail() {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
 
-  useEffect(() => {
-    fetchMatch();
-    fetchStats();
-  }, [matchId]);
-
-  const fetchMatch = async () => {
+  const fetchMatch = useCallback(async () => {
     try {
       const base = apiBase();
       const res = await fetch(`${base}/matches/${matchId}`);
@@ -49,9 +44,9 @@ export default function MatchDetail() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [matchId]);
 
-  const fetchStats = async () => {
+  const fetchStats = useCallback(async () => {
     try {
       const base = apiBase();
       const token = localStorage.getItem("token");
@@ -67,7 +62,12 @@ export default function MatchDetail() {
     } catch (err) {
       console.error(err);
     }
-  };
+  }, [matchId]);
+
+  useEffect(() => {
+    fetchMatch();
+    fetchStats();
+  }, [fetchMatch, fetchStats]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();

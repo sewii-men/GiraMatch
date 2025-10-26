@@ -42,11 +42,12 @@ export default function ReviewPage() {
           const resChats = await fetch(`${base}/chats`, { headers: { Authorization: `Bearer ${token}` } });
           if (resChats.ok) {
             const chats = await resChats.json();
-            const chat = (chats || []).find((c: any) => c.matchId === matchId);
+            const chat = (chats || []).find((c: { matchId?: string | number; partner?: { id?: string; name?: string; icon?: string } }) => String(c.matchId) === String(matchId));
             if (chat?.partner?.id) setPartner(chat.partner);
           }
         }
-      } catch (e) {
+      } catch (err) {
+        console.error(err);
         setError("データの取得に失敗しました");
       } finally {
         setLoading(false);
@@ -178,6 +179,11 @@ export default function ReviewPage() {
       {/* メインコンテンツ */}
       <main className="py-12 px-6">
         <div className="max-w-4xl mx-auto">
+          {error && (
+            <div className="bg-red-100 border border-red-300 text-red-800 px-4 py-3 rounded mb-4">
+              {error}
+            </div>
+          )}
           <Link
             href="/check-in"
             className="inline-flex items-center gap-2 text-gray-700 hover:text-black mb-6"

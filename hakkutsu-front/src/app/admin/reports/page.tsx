@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { apiBase } from "@/lib/apiBase";
 
 interface Report {
@@ -27,9 +27,19 @@ export default function ReportsAdmin() {
     fetchReports();
   }, []);
 
+  const applyFilters = useCallback(() => {
+    let filtered = [...reports];
+
+    if (filterStatus !== "all") {
+      filtered = filtered.filter((r) => r.status === filterStatus);
+    }
+
+    setFilteredReports(filtered);
+  }, [filterStatus, reports]);
+
   useEffect(() => {
     applyFilters();
-  }, [filterStatus, reports]);
+  }, [applyFilters]);
 
   const fetchReports = async () => {
     try {
@@ -53,15 +63,7 @@ export default function ReportsAdmin() {
     }
   };
 
-  const applyFilters = () => {
-    let filtered = [...reports];
-
-    if (filterStatus !== "all") {
-      filtered = filtered.filter((r) => r.status === filterStatus);
-    }
-
-    setFilteredReports(filtered);
-  };
+  
 
   if (loading) {
     return <div className="text-white text-xl">読み込み中...</div>;

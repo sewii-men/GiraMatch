@@ -30,7 +30,6 @@ export default function RestaurantMap({
   onRestaurantClick,
 }: RestaurantMapProps) {
   const [selectedRestaurant, setSelectedRestaurant] = useState<Restaurant | null>(null);
-  const [map, setMap] = useState<google.maps.Map | null>(null);
 
   const apiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY;
 
@@ -39,12 +38,12 @@ export default function RestaurantMap({
     googleMapsApiKey: apiKey || "",
   });
 
-  const onLoad = useCallback((map: google.maps.Map) => {
-    setMap(map);
+  const onLoad = useCallback(() => {
+    // Map instance available if needed in future
   }, []);
 
   const onUnmount = useCallback(() => {
-    setMap(null);
+    // Cleanup if needed in future
   }, []);
 
   // 共有数に基づいてマーカーのサイズを決定

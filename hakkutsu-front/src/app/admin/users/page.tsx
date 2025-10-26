@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { apiBase } from "@/lib/apiBase";
 
 interface User {
@@ -25,9 +25,34 @@ export default function UsersAdmin() {
     fetchUsers();
   }, []);
 
+  const applyFilters = useCallback(() => {
+    let filtered = [...users];
+
+    // 検索フィルター
+    if (searchTerm) {
+      const term = searchTerm.toLowerCase();
+      filtered = filtered.filter(
+        (u) =>
+          u.userId?.toLowerCase().includes(term) ||
+          u.name?.toLowerCase().includes(term)
+      );
+    }
+
+    // ステータスフィルター
+    if (filterStatus === "active") {
+      filtered = filtered.filter((u) => !u.suspended && !u.deleted);
+    } else if (filterStatus === "suspended") {
+      filtered = filtered.filter((u) => u.suspended);
+    } else if (filterStatus === "deleted") {
+      filtered = filtered.filter((u) => u.deleted);
+    }
+
+    setFilteredUsers(filtered);
+  }, [users, searchTerm, filterStatus]);
+
   useEffect(() => {
     applyFilters();
-  }, [searchTerm, filterStatus, users]);
+  }, [applyFilters]);
 
   const fetchUsers = async () => {
     try {
@@ -53,30 +78,7 @@ export default function UsersAdmin() {
     }
   };
 
-  const applyFilters = () => {
-    let filtered = [...users];
-
-    // 検索フィルター
-    if (searchTerm) {
-      const term = searchTerm.toLowerCase();
-      filtered = filtered.filter(
-        (u) =>
-          u.userId?.toLowerCase().includes(term) ||
-          u.name?.toLowerCase().includes(term)
-      );
-    }
-
-    // ステータスフィルター
-    if (filterStatus === "active") {
-      filtered = filtered.filter((u) => !u.suspended && !u.deleted);
-    } else if (filterStatus === "suspended") {
-      filtered = filtered.filter((u) => u.suspended);
-    } else if (filterStatus === "deleted") {
-      filtered = filtered.filter((u) => u.deleted);
-    }
-
-    setFilteredUsers(filtered);
-  };
+  
 
   if (loading) {
     return <div className="text-white text-xl">読み込み中...</div>;
