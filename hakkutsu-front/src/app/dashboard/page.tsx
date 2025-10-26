@@ -306,8 +306,8 @@ export default function Home() {
       const matchesData = await matchesRes.json();
       const upcoming = Array.isArray(matchesData)
         ? matchesData
-            .filter((m: Match) => m.status === "募集中" || m.status === "scheduled")
-            .slice(0, 3)
+          .filter((m: Match) => m.status === "募集中" || m.status === "scheduled")
+          .slice(0, 3)
         : [];
       setUpcomingMatches(upcoming);
 
@@ -593,11 +593,10 @@ export default function Home() {
                             <button
                               onClick={() => handleCancelRecruitment(recruitment.id, recruitment.opponent)}
                               disabled={cancellingId === recruitment.id}
-                              className={`px-4 py-2 rounded-full text-sm font-bold transition ${
-                                cancellingId === recruitment.id
+                              className={`px-4 py-2 rounded-full text-sm font-bold transition ${cancellingId === recruitment.id
                                   ? "bg-gray-300 text-gray-500 cursor-not-allowed"
                                   : "bg-white border-2 border-red-600 text-red-600 hover:bg-red-50"
-                              }`}
+                                }`}
                             >
                               {cancellingId === recruitment.id ? "取り消し中..." : "募集を取り消す"}
                             </button>
@@ -606,11 +605,10 @@ export default function Home() {
                             <button
                               onClick={() => handleDeleteRecruitment(recruitment.id, recruitment.opponent)}
                               disabled={deletingId === recruitment.id}
-                              className={`px-4 py-2 rounded-full text-sm font-bold transition ${
-                                deletingId === recruitment.id
+                              className={`px-4 py-2 rounded-full text-sm font-bold transition ${deletingId === recruitment.id
                                   ? "bg-gray-300 text-gray-500 cursor-not-allowed"
                                   : "bg-gray-600 text-white hover:bg-gray-700"
-                              }`}
+                                }`}
                             >
                               {deletingId === recruitment.id ? "削除中..." : "削除"}
                             </button>
@@ -644,10 +642,10 @@ export default function Home() {
                     request.recruiter?.gender === "male"
                       ? "男性"
                       : request.recruiter?.gender === "female"
-                      ? "女性"
-                      : request.recruiter?.gender
-                      ? "その他"
-                      : null;
+                        ? "女性"
+                        : request.recruiter?.gender
+                          ? "その他"
+                          : null;
                   return (
                     <div
                       key={request.requestId}
@@ -696,7 +694,7 @@ export default function Home() {
                         </p>
                       </div>
 
-                      {request.conditions?.length > 0 && (
+                      {request.conditions && request.conditions.length > 0 && (
                         <div className="flex flex-wrap gap-2 mb-3">
                           {request.conditions.slice(0, 4).map((condition, idx) => (
                             <span
@@ -730,11 +728,10 @@ export default function Home() {
                           <button
                             onClick={() => handleRemoveRequestCard(request.requestId)}
                             disabled={removingRequestId === request.requestId}
-                            className={`px-4 py-2 rounded-full text-sm font-bold transition ${
-                              removingRequestId === request.requestId
+                            className={`px-4 py-2 rounded-full text-sm font-bold transition ${removingRequestId === request.requestId
                                 ? "bg-gray-300 text-gray-500 cursor-not-allowed"
                                 : "bg-white border-2 border-gray-400 text-gray-700 hover:bg-gray-50"
-                            }`}
+                              }`}
                           >
                             {removingRequestId === request.requestId ? "処理中..." : "表示から削除"}
                           </button>
@@ -742,11 +739,10 @@ export default function Home() {
                           <button
                             onClick={() => handleCancelSentRequest(request)}
                             disabled={cancellingRequestId === request.requestId}
-                            className={`px-4 py-2 rounded-full text-sm font-bold transition ${
-                              cancellingRequestId === request.requestId
+                            className={`px-4 py-2 rounded-full text-sm font-bold transition ${cancellingRequestId === request.requestId
                                 ? "bg-gray-300 text-gray-500 cursor-not-allowed"
                                 : "bg-white border-2 border-red-600 text-red-600 hover:bg-red-50"
-                            }`}
+                              }`}
                           >
                             {cancellingRequestId === request.requestId
                               ? "処理中..."
