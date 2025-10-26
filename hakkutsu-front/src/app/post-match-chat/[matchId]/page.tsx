@@ -253,7 +253,7 @@ function PostMatchChatPageContent({
               {!restaurantsLoading && !restaurantsError &&
                 restaurants.map((restaurant) => (
                   <RestaurantCard
-                    key={restaurant.id}
+                    key={restaurant.restaurantId}
                     restaurant={restaurant}
                     onAttachToMessage={handleAttachRestaurant}
                   />
