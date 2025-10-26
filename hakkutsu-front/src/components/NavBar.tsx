@@ -18,7 +18,7 @@ export default function NavBar() {
       <div className="max-w-6xl mx-auto flex items-center justify-between">
         <Link href="/dashboard">
           <h1 className="text-2xl font-bold cursor-pointer">
-            <span className="text-yellow-400">Giravent</span>
+            <span className="text-yellow-400">GiraMatch</span>
           </h1>
         </Link>
         <nav className="flex items-center gap-4">

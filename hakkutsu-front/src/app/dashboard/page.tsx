@@ -831,7 +831,7 @@ export default function Home() {
       <section className="py-16 px-6 bg-white">
         <div className="max-w-6xl mx-auto">
           <h3 className="text-3xl font-bold text-center mb-12 text-black">
-            Giraventの特徴
+            GiraMatchの特徴
           </h3>
           <div className="grid md:grid-cols-3 gap-8">
             {/* 試合選択 */}
@@ -964,7 +964,7 @@ export default function Home() {
 
       {/* フッター */}
       <footer className="bg-gray-900 text-gray-400 py-8 px-6 text-center">
-        <p>&copy; 2025 Giravent - ギラヴァンツ北九州ファン創出アプリ</p>
+        <p>&copy; 2025 GiraMatch - ギラヴァンツ北九州ファン創出アプリ</p>
       </footer>
     </div>
   );

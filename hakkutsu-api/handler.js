@@ -271,68 +271,9 @@ app.get("/admin/verify", requireAdmin, (req, res) => {
   res.json({ isAdmin: true, userId: req.user?.sub });
 });
 
-// 統計データ取得
-app.get("/admin/stats", requireAdmin, async (req, res) => {
-  try {
-    // 各テーブルのデータをスキャン
-    const [usersData, matchesData, chatsData, checkinsData, reviewsData] = await Promise.all([
-      docClient.send(new ScanCommand({ TableName: USERS_TABLE })),
-      docClient.send(new ScanCommand({ TableName: MATCHES_TABLE })),
-      docClient.send(new ScanCommand({ TableName: CHATS_TABLE })),
-      docClient.send(new ScanCommand({ TableName: CHECKINS_TABLE })),
-      docClient.send(new ScanCommand({ TableName: REVIEWS_TABLE })),
-    ]);
-
-    const users = usersData.Items || [];
-    const matches = matchesData.Items || [];
-    const chats = chatsData.Items || [];
-    const checkins = checkinsData.Items || [];
-    const reviews = reviewsData.Items || [];
-
-    // アクティブユーザー計算
-    const now = new Date();
-    const oneDayAgo = new Date(now.getTime() - 24 * 60 * 60 * 1000);
-    const oneWeekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
-    const oneMonthAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
-
-    // 簡易的な実装（実際にはlastActiveAtなどのフィールドが必要）
-    const activeUsers = {
-      daily: 0,
-      weekly: 0,
-      monthly: 0,
-    };
-
-    // 試合別統計
-    const matchStats = matches.map((match) => {
-      const matchChats = chats.filter((c) => c.matchId === match.matchId);
-      const matchCheckins = checkins.filter((c) => c.matchId === match.matchId);
-      return {
-        matchId: match.matchId,
-        opponent: match.opponent,
-        date: match.date,
-        chatCount: matchChats.length,
-        checkinCount: matchCheckins.length,
-      };
-    }).sort((a, b) => b.chatCount - a.chatCount);
-
-    res.json({
-      totalUsers: users.length,
-      totalMatches: matches.length,
-      totalChats: chats.length,
-      totalCheckIns: checkins.length,
-      totalReviews: reviews.length,
-      activeUsers,
-      topMatches: matchStats.slice(0, 5),
-    });
-  } catch (error) {
-    console.error(error);
-    res.status(500).json({ error: "Could not fetch stats" });
-  }
-});
-
 // 登録
 app.post("/auth/register", async (req, res) => {
-  const { email, name, password } = req.body || {};
+  const { email, name, password, nickname, birthDate, gender, icon, style, seat } = req.body || {};
   if (!email || !name || !password) return res.status(400).json({ error: "email, name, password are required" });
   const emailErr = validateEmail(email);
   if (emailErr) return res.status(400).json({ error: emailErr });
@@ -358,13 +299,20 @@ app.post("/auth/register", async (req, res) => {
       userId,
       email: email.trim().toLowerCase(),
       name: name.trim(),
+      nickname: nickname ? nickname.trim() : name.trim(),
       passwordHash,
       isAdmin: false,
+      birthDate: birthDate || null,
+      gender: gender || null,
+      icon: icon || "👤",
+      style: style || null,
+      seat: seat || null,
+      trustScore: 0,
       createdAt: new Date().toISOString()
     };
     await docClient.send(new PutCommand({ TableName: USERS_TABLE, Item: item }));
     const token = jwt.sign({ sub: userId, name: item.name }, JWT_SECRET, { expiresIn: "7d" });
-    res.json({ token, user: { userId, name: item.name, email: item.email } });
+    res.json({ token, user: { userId, name: item.name, email: item.email, nickname: item.nickname } });
   } catch (error) {
     console.error(error);
     res.status(500).json({ error: "Could not register" });
@@ -1137,7 +1085,7 @@ app.post("/matching/request", requireAuth, async (req, res) => {
     if (recruitment.recruiterId === userId) {
       return res.status(400).json({ error: "Cannot request your own recruitment" });
     }
-    
+
     const { Item: requesterProfile } = await docClient.send(new GetCommand({
       TableName: USERS_TABLE,
       Key: { userId }
@@ -2385,11 +2333,57 @@ app.get("/users/:userId", async (req, res) => {
   const params = { TableName: USERS_TABLE, Key: { userId: req.params.userId } };
   try {
     const { Item } = await docClient.send(new GetCommand(params));
-    if (Item) res.json(Item);
-    else res.status(404).json({ error: "User not found" });
+    if (Item) {
+      // パスワードハッシュは除外
+      const { passwordHash, ...sanitized } = Item;
+      res.json(sanitized);
+    } else {
+      res.status(404).json({ error: "User not found" });
+    }
   } catch (error) {
     console.error(error);
     res.status(500).json({ error: "Could not retrieve user" });
+  }
+});
+
+// ユーザープロフィール更新
+app.put("/users/:userId", requireAuth, async (req, res) => {
+  const userId = req.params.userId;
+  const requestUserId = req.user?.sub;
+
+  // 自分のプロフィールのみ更新可能
+  if (userId !== requestUserId) {
+    return res.status(403).json({ error: "Forbidden: You can only update your own profile" });
+  }
+
+  const { name, nickname, birthDate, gender, icon, style, seat } = req.body || {};
+
+  try {
+    const { Item } = await docClient.send(
+      new GetCommand({ TableName: USERS_TABLE, Key: { userId } })
+    );
+
+    if (!Item) return res.status(404).json({ error: "User not found" });
+
+    const updated = {
+      ...Item,
+      name: name !== undefined ? name : Item.name,
+      nickname: nickname !== undefined ? nickname : Item.nickname,
+      birthDate: birthDate !== undefined ? birthDate : Item.birthDate,
+      gender: gender !== undefined ? gender : Item.gender,
+      icon: icon !== undefined ? icon : Item.icon,
+      style: style !== undefined ? style : Item.style,
+      seat: seat !== undefined ? seat : Item.seat,
+      updatedAt: new Date().toISOString(),
+    };
+
+    await docClient.send(new PutCommand({ TableName: USERS_TABLE, Item: updated }));
+
+    const { passwordHash, ...sanitized } = updated;
+    res.json(sanitized);
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: "Could not update user profile" });
   }
 });
 
@@ -2636,7 +2630,7 @@ app.get("/admin/users/:userId", requireAdmin, async (req, res) => {
 // 管理者: ユーザー情報更新
 app.put("/admin/users/:userId", requireAdmin, async (req, res) => {
   const userId = req.params.userId;
-  const { name } = req.body || {};
+  const { name, nickname, birthDate, gender, icon, style, seat, trustScore } = req.body || {};
 
   try {
     const { Item } = await docClient.send(
@@ -2648,6 +2642,13 @@ app.put("/admin/users/:userId", requireAdmin, async (req, res) => {
     const updated = {
       ...Item,
       name: name !== undefined ? name : Item.name,
+      nickname: nickname !== undefined ? nickname : Item.nickname,
+      birthDate: birthDate !== undefined ? birthDate : Item.birthDate,
+      gender: gender !== undefined ? gender : Item.gender,
+      icon: icon !== undefined ? icon : Item.icon,
+      style: style !== undefined ? style : Item.style,
+      seat: seat !== undefined ? seat : Item.seat,
+      trustScore: trustScore !== undefined ? trustScore : Item.trustScore,
       updatedAt: new Date().toISOString(),
     };
 

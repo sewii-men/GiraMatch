@@ -2,7 +2,7 @@
 
 ## 概要
 
-このガイドでは、Giraventアプリケーションのデータベース（DynamoDB）を実装する手順を段階的に説明します。
+このガイドでは、GiraMatchアプリケーションのデータベース（DynamoDB）を実装する手順を段階的に説明します。
 
 ## 前提条件
 
@@ -626,7 +626,7 @@ app.use("/reviews", reviewsRouter);
 
 // ヘルスチェック
 app.get("/", (req, res) => {
-  res.json({ message: "Giravent API is running!" });
+  res.json({ message: "GiraMatch API is running!" });
 });
 
 // 404
