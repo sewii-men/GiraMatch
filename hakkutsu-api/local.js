@@ -160,6 +160,12 @@ async function ensureTable({ tableName, keySchema, attributeDefinitions, globalS
   }
 }
 
+
+function generateUserId() {
+  return `user-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
+}
+
+
 async function seedRestaurants() {
   if (!isLocal) return;
 
@@ -280,7 +286,6 @@ async function seedPostMatchChatData() {
   }
 }
 
-
 async function ensureLocalAdminOnly() {
   const client = new DynamoDBClient({
     endpoint: process.env.DYNAMODB_LOCAL_URL,
@@ -294,28 +299,39 @@ async function ensureLocalAdminOnly() {
 
   // Always ensure local admin account exists using env credentials
   try {
-    const adminEmail = process.env.ADMIN_EMAIL || "admin";
+    const adminEmail = process.env.ADMIN_EMAIL || "admin@example.com";
     const adminPassword = process.env.ADMIN_PASSWORD;
     if (!adminPassword) {
       console.warn("⚠️  ADMIN_PASSWORD is not set; skipping local admin ensure");
       return;
     }
 
-    const { Item: adminItem } = await doc.send(
-      new GetCommand({ TableName: USERS_TABLE, Key: { userId: adminEmail } })
+    const normalizedEmail = adminEmail.trim().toLowerCase();
+
+    // メールアドレスで既存の管理者を検索
+    const scanResult = await doc.send(
+      new ScanCommand({
+        TableName: USERS_TABLE,
+        FilterExpression: "email = :email",
+        ExpressionAttributeValues: { ":email": normalizedEmail },
+      })
     );
+
+    const existingAdmin = scanResult.Items && scanResult.Items.length > 0 ? scanResult.Items[0] : null;
+    const userId = existingAdmin?.userId || generateUserId();
+
     const ensuredAdmin = {
-      userId: adminEmail,
-      name: adminItem?.name || "管理者",
+      userId,
+      email: normalizedEmail,
+      name: existingAdmin?.name || "管理者",
       passwordHash: bcrypt.hashSync(adminPassword, 10),
       isAdmin: true,
-      createdAt: adminItem?.createdAt || new Date().toISOString(),
-      // keep existing flags if present
-      suspended: adminItem?.suspended || false,
-      deleted: adminItem?.deleted || false,
+      createdAt: existingAdmin?.createdAt || new Date().toISOString(),
+      suspended: existingAdmin?.suspended || false,
+      deleted: existingAdmin?.deleted || false,
     };
     await doc.send(new PutCommand({ TableName: USERS_TABLE, Item: ensuredAdmin }));
-    console.log(`🔐 Ensured local admin account (${adminEmail})`);
+    console.log(`🔐 Ensured local admin account (${normalizedEmail})`);
   } catch (e) {
     console.warn("⚠️  Failed ensuring local admin account", e?.message || e);
   }

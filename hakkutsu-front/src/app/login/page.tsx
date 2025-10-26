@@ -5,7 +5,7 @@ import Link from "next/link";
 import { apiBase } from "@/lib/apiBase";
 
 export default function LoginPage() {
-  const [userId, setUserId] = useState("");
+  const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -14,9 +14,9 @@ export default function LoginPage() {
     e.preventDefault();
     setError(null);
     // client-side basic validation
-    const idOk = /^[a-zA-Z0-9_-]{3,30}$/.test(userId.trim());
-    if (!idOk) {
-      setError("ユーザーIDは3〜30文字、英数字・_・-のみ利用できます");
+    const emailOk = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim());
+    if (!emailOk) {
+      setError("有効なメールアドレスを入力してください");
       return;
     }
     if (password.length < 8 || password.length > 72) {
@@ -29,12 +29,12 @@ export default function LoginPage() {
       const res = await fetch(`${base}/auth/login`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ userId: userId.trim(), password }),
+        body: JSON.stringify({ email: email.trim(), password }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data?.error || "ログインに失敗しました");
       localStorage.setItem("token", data.token);
-      localStorage.setItem("userId", data.user?.userId || userId);
+      localStorage.setItem("userId", data.user?.userId);
       const params = new URLSearchParams(window.location.search);
       const next = params.get("next") || "/";
       window.location.href = next;
@@ -52,12 +52,13 @@ export default function LoginPage() {
         <h1 className="text-2xl font-bold text-center mb-6 text-black">ログイン</h1>
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
-            <label className="block text-sm text-gray-700 mb-1">ユーザーID</label>
+            <label className="block text-sm text-gray-700 mb-1">メールアドレス</label>
             <input
+              type="email"
               className="w-full border-2 border-gray-300 rounded-lg px-4 py-2 focus:outline-none focus:border-yellow-400 text-black"
-              value={userId}
-              onChange={(e) => setUserId(e.target.value)}
-              placeholder="your-id"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              placeholder="your-email@example.com"
               required
             />
           </div>
