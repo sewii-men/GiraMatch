@@ -62,13 +62,13 @@ const isLocal = !!process.env.DYNAMODB_LOCAL_URL;
 const client = new DynamoDBClient(
   isLocal
     ? {
-        endpoint: process.env.DYNAMODB_LOCAL_URL,
-        region: process.env.AWS_REGION || "ap-northeast-1",
-        credentials: {
-          accessKeyId: process.env.AWS_ACCESS_KEY_ID || "dummy",
-          secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY || "dummy",
-        },
-      }
+      endpoint: process.env.DYNAMODB_LOCAL_URL,
+      region: process.env.AWS_REGION || "ap-northeast-1",
+      credentials: {
+        accessKeyId: process.env.AWS_ACCESS_KEY_ID || "dummy",
+        secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY || "dummy",
+      },
+    }
     : {}
 );
 const docClient = DynamoDBDocumentClient.from(client);
@@ -430,6 +430,32 @@ app.post("/auth/login", async (req, res) => {
   } catch (error) {
     console.error(error);
     res.status(500).json({ error: "Could not login" });
+  }
+});
+
+// ========== Matches ==========
+// 一覧
+app.get("/matches", async (req, res) => {
+  try {
+    const data = await docClient.send(new ScanCommand({ TableName: MATCHES_TABLE }));
+    const items = (data.Items || []).sort((a, b) => (a.matchId > b.matchId ? 1 : -1));
+    res.json(items);
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: "Could not list matches" });
+  }
+});
+
+// 詳細
+app.get("/matches/:matchId", async (req, res) => {
+  const params = { TableName: MATCHES_TABLE, Key: { matchId: req.params.matchId } };
+  try {
+    const { Item } = await docClient.send(new GetCommand(params));
+    if (!Item) return res.status(404).json({ error: "Match not found" });
+    res.json(Item);
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: "Could not get match" });
   }
 });
 
@@ -1094,7 +1120,7 @@ app.post("/matching/request", requireAuth, async (req, res) => {
     if (existingRequest) {
       return res.status(409).json({ error: "Request already sent" });
     }
-    
+
     const userData = await docClient.send(new GetCommand({
       TableName: USERS_TABLE,
       Key: { userId: String(userId) }
