@@ -23,8 +23,31 @@ export default function MatchesPage() {
       try {
         const base = apiBase();
         const res = await fetch(`${base}/matches`);
+
+        if (!res.ok) {
+          let message = "試合一覧の取得に失敗しました";
+          try {
+            const err = await res.json();
+            if (err && typeof err === "object" && "error" in err && typeof err.error === "string") {
+              message = err.error as string;
+            }
+          } catch {
+            // ignore JSON parse errors, keep default message
+          }
+          setError(message);
+          setMatches([]);
+          return;
+        }
+
         const data = await res.json();
-        setMatches(data);
+        if (Array.isArray(data)) {
+          setMatches(data);
+        } else if (data && Array.isArray((data as any).items)) {
+          setMatches((data as any).items);
+        } else {
+          // Defensive: ensure state is always an array
+          setMatches([]);
+        }
       } catch {
         setError("試合一覧の取得に失敗しました");
       } finally {

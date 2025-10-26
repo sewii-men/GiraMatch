@@ -8,6 +8,7 @@ export default function RegisterPage() {
   const [userId, setUserId] = useState("");
   const [name, setName] = useState("");
   const [password, setPassword] = useState("");
+  const [birthDate, setBirthDate] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
@@ -29,13 +30,29 @@ export default function RegisterPage() {
       setError("パスワードは8〜72文字で英字と数字を含めてください");
       return;
     }
+    if (!birthDate) {
+      setError("誕生日を入力してください");
+      return;
+    }
+    const birthDateObj = new Date(birthDate);
+    const today = new Date();
+    if (isNaN(birthDateObj.getTime()) || birthDateObj > today) {
+      setError("有効な誕生日を入力してください");
+      return;
+    }
+    const minDate = new Date();
+    minDate.setFullYear(today.getFullYear() - 150);
+    if (birthDateObj < minDate) {
+      setError("誕生日が無効です");
+      return;
+    }
     setLoading(true);
     try {
       const base = apiBase();
       const res = await fetch(`${base}/auth/register`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ userId: userId.trim(), name: nameTrim, password }),
+        body: JSON.stringify({ userId: userId.trim(), name: nameTrim, password, birthDate }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data?.error || "登録に失敗しました");
@@ -85,6 +102,17 @@ export default function RegisterPage() {
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               placeholder="8文字以上を推奨"
+              required
+            />
+          </div>
+          <div>
+            <label className="block text-sm text-gray-700 mb-1">誕生日</label>
+            <input
+              type="date"
+              className="w-full border-2 border-gray-300 rounded-lg px-4 py-2 focus:outline-none focus:border-yellow-400 text-black"
+              value={birthDate}
+              onChange={(e) => setBirthDate(e.target.value)}
+              max={new Date().toISOString().split('T')[0]}
               required
             />
           </div>
