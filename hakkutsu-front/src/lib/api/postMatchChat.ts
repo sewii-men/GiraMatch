@@ -74,7 +74,7 @@ function mapRestaurant(backendRestaurant: BackendRestaurant): Restaurant {
     googleMapUrl: backendRestaurant.googleMapUrl,
     latitude: backendRestaurant.latitude,
     longitude: backendRestaurant.longitude,
-    category: backendRestaurant.category,
+    category: backendRestaurant.category as "izakaya" | "cafe" | "ramen" | "other",
     distance: backendRestaurant.distance,
   };
 }
