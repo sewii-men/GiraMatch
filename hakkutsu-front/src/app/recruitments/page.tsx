@@ -104,7 +104,7 @@ export default function RecruitmentsPage() {
     applyFiltersAndSort();
   }, [recruitments, sortBy, genderFilter, searchTerm, selectedStyles, selectedSeats, venueFilter, ageFilter, currentUserBirthDate]);
 
-  const fetchRecruitments = async () => {
+  const fetchRecruitments = useCallback(async () => {
 
     try {
       const base = process.env.NEXT_PUBLIC_API_URL;
