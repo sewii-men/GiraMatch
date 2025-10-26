@@ -1590,9 +1590,11 @@ app.get("/matches/:matchId/post-match-chat", requireAuth, async (req, res) => {
       batchGetUsersByIds(messageItems.map((item) => item.user_id)),
     ]);
 
-    const messages = messageItems.map((item) =>
-      mapMessageResponse(item, item.restaurant_id ? restaurantMap[item.restaurant_id] : null, userMap[item.user_id])
-    );
+    const messages = messageItems.map((item) => {
+      // restaurant_dataがあればそれを使用、なければrestaurant_idからマップを検索
+      const restaurant = item.restaurant_data || (item.restaurant_id ? restaurantMap[item.restaurant_id] : null);
+      return mapMessageResponse(item, restaurant, userMap[item.user_id]);
+    });
 
     res.json({
       chat: mapChatResponse(chatItem, matchResp.Item),
@@ -1618,7 +1620,9 @@ app.post("/post-match-chats/:chatId/messages", requireAuth, async (req, res) => 
   const userId = getCurrentUserId(req);
   if (!userId) return res.status(401).json({ error: "Unauthorized" });
 
-  const { text, restaurantId } = req.body || {};
+  const { text, restaurant } = req.body || {};
+  console.log("[POST /post-match-chats/:chatId/messages] Received:", { text, restaurant });
+
   if (!text || typeof text !== "string" || !text.trim()) {
     return res.status(400).json({ error: "text is required" });
   }
@@ -1643,22 +1647,10 @@ app.post("/post-match-chats/:chatId/messages", requireAuth, async (req, res) => 
       return res.status(403).json({ error: "Chat not found or not accessible" });
     }
 
-    let restaurant = null;
-    if (restaurantId) {
-      const restaurantResp = await docClient.send(
-        new GetCommand({
-          TableName: RESTAURANTS_TABLE,
-          Key: { restaurant_id: restaurantId },
-        })
-      );
-      if (!restaurantResp.Item) {
-        return res.status(404).json({ error: "Restaurant not found" });
-      }
-      restaurant = mapRestaurantItem(restaurantResp.Item);
-    }
-
     const now = new Date().toISOString();
     const messageId = `msg_${Date.now()}`;
+    const restaurantId = restaurant?.restaurantId || null;
+
     const messageItem = {
       message_id: messageId,
       chat_id: chatId,
@@ -1668,6 +1660,7 @@ app.post("/post-match-chats/:chatId/messages", requireAuth, async (req, res) => 
       updated_at: null,
       is_deleted: false,
       ...(restaurantId ? { restaurant_id: restaurantId } : {}),
+      ...(restaurant ? { restaurant_data: restaurant } : {}),
     };
 
     await docClient.send(
@@ -1697,12 +1690,139 @@ app.post("/post-match-chats/:chatId/messages", requireAuth, async (req, res) => 
 
     const userMap = await batchGetUsersByIds([userId]);
 
+    const responseMessage = mapMessageResponse(messageItem, restaurant, userMap[userId]);
+    console.log("[POST /post-match-chats/:chatId/messages] Sending response:", { message: responseMessage });
+
     res.status(201).json({
-      message: mapMessageResponse(messageItem, restaurant, userMap[userId]),
+      message: responseMessage,
+    });
+  } catch (error) {
+    console.error("[POST /post-match-chats/:chatId/messages] Error:", error);
+    res.status(500).json({ error: "Could not send message" });
+  }
+});
+
+// メッセージ更新（編集）
+app.put("/post-match-chats/:chatId/messages/:messageId", requireAuth, async (req, res) => {
+  if (!POST_MATCH_CHAT_MESSAGES_TABLE || !CHAT_PARTICIPANTS_TABLE) {
+    return res.status(500).json({ error: "Post-match chat tables are not configured" });
+  }
+
+  const { chatId, messageId } = req.params;
+  const userId = getCurrentUserId(req);
+  if (!userId) return res.status(401).json({ error: "Unauthorized" });
+
+  const { text } = req.body || {};
+  if (!text || typeof text !== "string" || !text.trim()) {
+    return res.status(400).json({ error: "text is required" });
+  }
+  if (text.length > 500) {
+    return res.status(400).json({ error: "text must be 500 characters or less" });
+  }
+
+  try {
+    // メッセージの存在確認と権限チェック
+    const messageResp = await docClient.send(
+      new GetCommand({
+        TableName: POST_MATCH_CHAT_MESSAGES_TABLE,
+        Key: { chat_id: chatId, message_id: messageId },
+      })
+    );
+
+    if (!messageResp.Item) {
+      return res.status(404).json({ error: "Message not found" });
+    }
+
+    // 自分のメッセージか確認
+    if (messageResp.Item.user_id !== userId) {
+      return res.status(403).json({ error: "You can only edit your own messages" });
+    }
+
+    // メッセージを更新
+    const now = new Date().toISOString();
+    await docClient.send(
+      new UpdateCommand({
+        TableName: POST_MATCH_CHAT_MESSAGES_TABLE,
+        Key: { chat_id: chatId, message_id: messageId },
+        UpdateExpression: "SET #text = :text, updated_at = :now",
+        ExpressionAttributeNames: { "#text": "text" },
+        ExpressionAttributeValues: {
+          ":text": text.trim(),
+          ":now": now,
+        },
+      })
+    );
+
+    const [restaurantMap, userMap] = await Promise.all([
+      messageResp.Item.restaurant_id ? batchGetRestaurantsByIds([messageResp.Item.restaurant_id]) : Promise.resolve({}),
+      batchGetUsersByIds([userId]),
+    ]);
+
+    const updatedMessage = {
+      ...messageResp.Item,
+      text: text.trim(),
+      updated_at: now,
+    };
+
+    res.json({
+      message: mapMessageResponse(
+        updatedMessage,
+        messageResp.Item.restaurant_id ? restaurantMap[messageResp.Item.restaurant_id] : null,
+        userMap[userId]
+      ),
     });
   } catch (error) {
     console.error(error);
-    res.status(500).json({ error: "Could not send message" });
+    res.status(500).json({ error: "Could not update message" });
+  }
+});
+
+// メッセージ削除（論理削除）
+app.delete("/post-match-chats/:chatId/messages/:messageId", requireAuth, async (req, res) => {
+  if (!POST_MATCH_CHAT_MESSAGES_TABLE) {
+    return res.status(500).json({ error: "Post-match chat messages table is not configured" });
+  }
+
+  const { chatId, messageId } = req.params;
+  const userId = getCurrentUserId(req);
+  if (!userId) return res.status(401).json({ error: "Unauthorized" });
+
+  try {
+    // メッセージの存在確認と権限チェック
+    const messageResp = await docClient.send(
+      new GetCommand({
+        TableName: POST_MATCH_CHAT_MESSAGES_TABLE,
+        Key: { chat_id: chatId, message_id: messageId },
+      })
+    );
+
+    if (!messageResp.Item) {
+      return res.status(404).json({ error: "Message not found" });
+    }
+
+    // 自分のメッセージか確認
+    if (messageResp.Item.user_id !== userId) {
+      return res.status(403).json({ error: "You can only delete your own messages" });
+    }
+
+    // 論理削除
+    const now = new Date().toISOString();
+    await docClient.send(
+      new UpdateCommand({
+        TableName: POST_MATCH_CHAT_MESSAGES_TABLE,
+        Key: { chat_id: chatId, message_id: messageId },
+        UpdateExpression: "SET is_deleted = :true, updated_at = :now",
+        ExpressionAttributeValues: {
+          ":true": true,
+          ":now": now,
+        },
+      })
+    );
+
+    res.json({ message: "Message deleted successfully" });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: "Could not delete message" });
   }
 });
 
