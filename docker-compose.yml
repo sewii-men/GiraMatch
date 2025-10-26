@@ -27,6 +27,7 @@ services:
       - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID:-dummy}
       - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY:-dummy}
       - AWS_REGION=${AWS_REGION:-ap-northeast-1}
+      - PLACES_API_KEY=${PLACES_API_KEY:-}
     depends_on:
       - dynamodb
     restart: on-failure
