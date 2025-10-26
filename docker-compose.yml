@@ -21,6 +21,8 @@ services:
       - SYSTEM_API_TOKEN=${SYSTEM_API_TOKEN:-dev-system-token}
       - JWT_SECRET=${JWT_SECRET:-dev-secret}
       - ALLOWED_ORIGINS=${ALLOWED_ORIGINS:-http://localhost:3000}
+      - ADMIN_EMAIL=${ADMIN_EMAIL:-admin@test.com}
+      - ADMIN_PASSWORD=${ADMIN_PASSWORD:-secret0101}
       - DYNAMODB_LOCAL_URL=${DYNAMODB_LOCAL_URL:-http://dynamodb:8000}
       - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID:-dummy}
       - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY:-dummy}
