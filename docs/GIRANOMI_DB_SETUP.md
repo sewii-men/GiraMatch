@@ -320,56 +320,43 @@ npm install
 
 本番環境（AWS DynamoDB）へデプロイする場合は、以下の手順を実行します。
 
-### 1. serverless.ymlの更新
+### 1. SAM テンプレートの更新（またはスクリプトで作成）
 
-`hakkutsu-api/serverless.yml` にギラ飲み機能用のテーブル定義を追加します。
+本リポジトリは Serverless Framework を使用しません。AWS SAM を使用します。
+追加のDynamoDBリソースが必要な場合は、`hakkutsu-api/template.yaml` に追記するか、
+用意済みのスクリプト（`hakkutsu-api/scripts/create-giranomi-tables.sh`）を使って作成してください。
+
+テンプレートに追記する場合の例（抜粋）:
 
 ```yaml
-resources:
-  Resources:
-    RestaurantsTable:
-      Type: AWS::DynamoDB::Table
-      Properties:
-        TableName: Restaurants
-        AttributeDefinitions:
-          - AttributeName: restaurant_id
-            AttributeType: S
-          - AttributeName: venue
-            AttributeType: S
-          - AttributeName: distance
-            AttributeType: N
-          - AttributeName: name
-            AttributeType: S
-        KeySchema:
-          - AttributeName: restaurant_id
-            KeyType: HASH
-        GlobalSecondaryIndexes:
-          - IndexName: VenueDistanceIndex
-            KeySchema:
-              - AttributeName: venue
-                KeyType: HASH
-              - AttributeName: distance
-                KeyType: RANGE
-            Projection:
-              ProjectionType: ALL
-          - IndexName: VenueNameIndex
-            KeySchema:
-              - AttributeName: venue
-                KeyType: HASH
-              - AttributeName: name
-                KeyType: RANGE
-            Projection:
-              ProjectionType: ALL
-        BillingMode: PAY_PER_REQUEST
-
-    # PostMatchChats, PostMatchChatMessages, RestaurantShares も同様に追加
+Resources:
+  RestaurantsTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub restaurants-${StageName}
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: restaurant_id
+          AttributeType: S
+      KeySchema:
+        - AttributeName: restaurant_id
+          KeyType: HASH
 ```
 
-### 2. デプロイ
+スクリプトを使う場合:
 
 ```bash
 cd hakkutsu-api
-serverless deploy
+chmod +x scripts/create-giranomi-tables.sh
+./scripts/create-giranomi-tables.sh
+```
+
+### 2. デプロイ（AWS SAM）
+
+```bash
+cd hakkutsu-api
+sam build
+sam deploy --guided
 ```
 
 ### 3. 本番データの投入

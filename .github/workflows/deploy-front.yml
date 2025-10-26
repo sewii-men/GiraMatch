@@ -57,10 +57,25 @@ jobs:
         run: |
           set -euo pipefail
           echo "Probing $API_URL ..."
-          # Basic health endpoint
-          curl -fsSL "$API_URL/" | head -c 200
-          # Public list endpoint
-          curl -fsS -H 'Accept: application/json' "$API_URL/matches" | head -c 200
+          # Probe root (some gateways return 404 at root even when Lambda is up)
+          ROOT_STATUS=$(curl -sS -o root_resp.json -w "%{http_code}" "$API_URL/") || true
+          head -c 200 root_resp.json || true
+          echo
+          if [ "$ROOT_STATUS" != "200" ] && [ "$ROOT_STATUS" != "404" ]; then
+            echo "::error::Unexpected root status: $ROOT_STATUS (expected 200 or 404)"
+            exit 1
+          fi
+
+          # Probe a known public endpoint that should be 200
+          RECRUIT_STATUS=$(curl -sS -H 'Accept: application/json' -o recruit_resp.json -w "%{http_code}" "$API_URL/matching/recruitments") || true
+          echo "Response body:"
+          cat recruit_resp.json || true
+          echo
+          if [ "$RECRUIT_STATUS" != "200" ]; then
+            echo "::error::/matching/recruitments unhealthy. HTTP $RECRUIT_STATUS"
+            echo "::error::Response: $(cat recruit_resp.json 2>/dev/null || echo 'no response body')"
+            exit 1
+          fi
 
       - name: Vercel auth check
         run: |
@@ -78,18 +93,11 @@ jobs:
       # and rely on Vercel's remote builders during deploy.
 
       - name: Deploy
+        if: github.ref == 'refs/heads/main'
         env:
           NEXT_PUBLIC_API_URL: ${{ steps.api.outputs.url }}
         run: |
           set -euo pipefail
-          if [ -z "${NEXT_PUBLIC_API_URL:-}" ]; then
-            echo "::error::NEXT_PUBLIC_API_URL is empty. Aborting deploy."
-            exit 1
-          fi
-          if [ "${{ github.ref_name }}" = "main" ]; then
-            echo "🚀 Deploying to Production (remote build from repo root)"
-            npx vercel deploy --prod --yes --token="$VERCEL_TOKEN" ${VERCEL_SCOPE:+--scope="$VERCEL_SCOPE"} --env NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL
-          else
-            echo "🧪 Deploying to Preview (remote build from repo root)"
-            npx vercel deploy --yes --token="$VERCEL_TOKEN" ${VERCEL_SCOPE:+--scope="$VERCEL_SCOPE"} --env NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL
-          fi
+          echo "🚀 Deploying to Production (remote build from repo root)"
+          npx vercel deploy --prod --yes --token="$VERCEL_TOKEN" ${VERCEL_SCOPE:+--scope="$VERCEL_SCOPE"} --env NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL
+

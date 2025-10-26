@@ -18,6 +18,7 @@ services:
       - POST_MATCH_CHAT_MESSAGES_TABLE=${POST_MATCH_CHAT_MESSAGES_TABLE:-post-match-chat-messages-table-dev}
       - RESTAURANT_SHARES_TABLE=${RESTAURANT_SHARES_TABLE:-restaurant-shares-table-dev}
       - CHAT_PARTICIPANTS_TABLE=${CHAT_PARTICIPANTS_TABLE:-chat-participants-table-dev}
+      - SYSTEM_API_TOKEN=${SYSTEM_API_TOKEN:-dev-system-token}
       - JWT_SECRET=${JWT_SECRET:-dev-secret}
       - ALLOWED_ORIGINS=${ALLOWED_ORIGINS:-http://localhost:3000}
       - DYNAMODB_LOCAL_URL=${DYNAMODB_LOCAL_URL:-http://dynamodb:8000}

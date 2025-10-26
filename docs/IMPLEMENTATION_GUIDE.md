@@ -11,7 +11,7 @@
 - Node.js 20.x 以上
 - Docker & Docker Compose
 - AWS CLI（本番デプロイ時）
-- Serverless Framework
+- AWS SAM（Serverless Framework から移行済み）
 
 ### 必要な知識
 
@@ -450,7 +450,7 @@ hakkutsu-api/
 ├── scripts/
 │   └── create-tables.js
 ├── package.json
-└── serverless.yml
+└── template.yaml
 ```
 
 #### 4-2. DynamoDBクライアントの共通化
@@ -577,7 +577,7 @@ module.exports = router;
 
 ```javascript
 const express = require("express");
-const serverless = require("serverless-http");
+const serverless = require("serverless-http"); // ライブラリ名ですが、デプロイはAWS SAMを使用
 
 const app = express();
 
@@ -756,9 +756,9 @@ export default async function MatchesPage() {
 
 ## フェーズ3: 本番環境へのデプロイ
 
-### Step 8: serverless.ymlの更新
+### Step 8: SAM テンプレートの更新
 
-**ファイル**: `hakkutsu-api/serverless.yml`
+**ファイル**: `hakkutsu-api/template.yaml`
 
 全テーブル定義を追加：
 
@@ -820,10 +820,10 @@ resources:
 cd hakkutsu-api
 
 # devステージにデプロイ
-serverless deploy --stage dev
+sam build && sam deploy --guided
 
 # 本番環境にデプロイ
-serverless deploy --stage prod
+sam build && sam deploy --guided
 ```
 
 ### Step 10: Vercelの環境変数設定
@@ -865,7 +865,7 @@ NEXT_PUBLIC_API_URL=https://xxxxx.execute-api.ap-northeast-1.amazonaws.com
 **症状**: ブラウザコンソールに `Access-Control-Allow-Origin` エラー
 
 **解決策**:
-1. serverless.ymlのCORS設定を確認
+1. SAMのHttpApi CORS設定を確認（template.yaml）
 2. handler.jsのCORSミドルウェアを確認
 3. フロントエンドのオリジンが許可リストに含まれているか確認
 
@@ -952,7 +952,7 @@ provider:
 Lambda関数のログを確認：
 
 ```bash
-serverless logs -f api --tail
+sam logs -n ExpressFunction --stack-name <your-sam-stack> --tail
 ```
 
 ### CloudWatch Metrics
@@ -976,7 +976,7 @@ DynamoDBのメトリクスを監視：
 
 ## 参考資料
 
-- [Serverless Framework ドキュメント](https://www.serverless.com/framework/docs)
+- [AWS SAM ドキュメント](https://docs.aws.amazon.com/serverless-application-model/latest/developerguide/)
 - [AWS DynamoDB ベストプラクティス](https://docs.aws.amazon.com/amazondynamodb/latest/developerguide/best-practices.html)
 - [Express.js ガイド](https://expressjs.com/ja/guide/routing.html)
 

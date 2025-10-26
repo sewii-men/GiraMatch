@@ -10,7 +10,8 @@
     "dev": "next dev --turbopack",
     "build": "next build --turbopack",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "test": "echo 'No tests configured' && exit 0"
   },
   "dependencies": {
     "@react-google-maps/api": "^2.20.7",

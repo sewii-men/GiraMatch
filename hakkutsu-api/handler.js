@@ -62,13 +62,13 @@ const isLocal = !!process.env.DYNAMODB_LOCAL_URL;
 const client = new DynamoDBClient(
   isLocal
     ? {
-        endpoint: process.env.DYNAMODB_LOCAL_URL,
-        region: process.env.AWS_REGION || "ap-northeast-1",
-        credentials: {
-          accessKeyId: process.env.AWS_ACCESS_KEY_ID || "dummy",
-          secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY || "dummy",
-        },
-      }
+      endpoint: process.env.DYNAMODB_LOCAL_URL,
+      region: process.env.AWS_REGION || "ap-northeast-1",
+      credentials: {
+        accessKeyId: process.env.AWS_ACCESS_KEY_ID || "dummy",
+        secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY || "dummy",
+      },
+    }
     : {}
 );
 const docClient = DynamoDBDocumentClient.from(client);
@@ -433,6 +433,32 @@ app.post("/auth/login", async (req, res) => {
   }
 });
 
+// ========== Matches ==========
+// 一覧
+app.get("/matches", async (req, res) => {
+  try {
+    const data = await docClient.send(new ScanCommand({ TableName: MATCHES_TABLE }));
+    const items = (data.Items || []).sort((a, b) => (a.matchId > b.matchId ? 1 : -1));
+    res.json(items);
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: "Could not list matches" });
+  }
+});
+
+// 詳細
+app.get("/matches/:matchId", async (req, res) => {
+  const params = { TableName: MATCHES_TABLE, Key: { matchId: req.params.matchId } };
+  try {
+    const { Item } = await docClient.send(new GetCommand(params));
+    if (!Item) return res.status(404).json({ error: "Match not found" });
+    res.json(Item);
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: "Could not get match" });
+  }
+});
+
 // ========== Matching Candidates ==========
 app.get("/matching/candidates", requireAuth, async (req, res) => {
   try {
@@ -527,21 +553,34 @@ app.post("/matching/recruit", requireAuth, async (req, res) => {
 // 募集一覧を取得
 app.get("/matching/recruitments", async (req, res) => {
   try {
+    console.log("📋 /matching/recruitments endpoint called");
+    console.log("📋 RECRUITMENTS_TABLE:", RECRUITMENTS_TABLE);
+    console.log("📋 REQUESTS_TABLE:", REQUESTS_TABLE);
+
+    if (!RECRUITMENTS_TABLE) {
+      console.error("❌ RECRUITMENTS_TABLE is not defined");
+      return res.status(500).json({ error: "RECRUITMENTS_TABLE is not configured" });
+    }
+
     const currentUserId = getUserIdFromRequest(req);
     let requestedRecruitmentIds = new Set();
 
-    if (currentUserId) {
-      const requestsData = await docClient.send(new ScanCommand({
-        TableName: REQUESTS_TABLE
-      }));
+    if (currentUserId && REQUESTS_TABLE) {
+      try {
+        const requestsData = await docClient.send(new ScanCommand({
+          TableName: REQUESTS_TABLE
+        }));
 
-      requestedRecruitmentIds = new Set(
-        (requestsData.Items || [])
-          .filter((req) => req.requesterId === currentUserId && (req.isRequested ?? true))
-          .map((req) => req.recruitmentId)
-      );
+        requestedRecruitmentIds = new Set(
+          (requestsData.Items || [])
+            .filter((req) => req.requesterId === currentUserId && (req.isRequested ?? true))
+            .map((req) => req.recruitmentId)
+        );
 
-      console.log("✅ 認証済みユーザーのリクエスト数:", requestedRecruitmentIds.size);
+        console.log("✅ 認証済みユーザーのリクエスト数:", requestedRecruitmentIds.size);
+      } catch (requestError) {
+        console.error("⚠️ Error fetching requests (non-fatal):", requestError);
+      }
     }
 
     const data = await docClient.send(new ScanCommand({
@@ -586,8 +625,13 @@ app.get("/matching/recruitments", async (req, res) => {
 
     res.json(activeRecruitments);
   } catch (error) {
-    console.error(error);
-    res.status(500).json({ error: "Could not fetch recruitments" });
+    console.error("❌ Error in /matching/recruitments:", error);
+    console.error("❌ Error stack:", error.stack);
+    res.status(500).json({
+      error: "Could not fetch recruitments",
+      details: error.message,
+      tableName: RECRUITMENTS_TABLE
+    });
   }
 });
 
@@ -1076,7 +1120,7 @@ app.post("/matching/request", requireAuth, async (req, res) => {
     if (recruitment.recruiterId === userId) {
       return res.status(400).json({ error: "Cannot request your own recruitment" });
     }
-
+    
     const { Item: requesterProfile } = await docClient.send(new GetCommand({
       TableName: USERS_TABLE,
       Key: { userId }

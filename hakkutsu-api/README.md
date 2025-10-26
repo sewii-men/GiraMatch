@@ -1,21 +1,17 @@
 <!--
-title: 'Serverless Framework Node Express API service backed by DynamoDB on AWS'
-description: 'This template demonstrates how to develop and deploy a simple Node Express API service backed by DynamoDB running on AWS Lambda using the Serverless Framework.'
+title: 'Express API on AWS Lambda with DynamoDB (AWS SAM)'
+description: 'Express + DynamoDB running on AWS Lambda behind API Gateway, deployed with AWS SAM.'
 layout: Doc
-framework: v4
 platform: AWS
 language: nodeJS
 priority: 1
-authorLink: 'https://github.com/serverless'
-authorName: 'Serverless, Inc.'
-authorAvatar: 'https://avatars1.githubusercontent.com/u/13742415?s=200&v=4'
 -->
 
 # Express API on AWS Lambda (via AWS SAM)
 
 This service runs an Express application on AWS Lambda behind an Amazon API Gateway HTTP API. Deployment uses AWS SAM (not Serverless Framework).
 
-We use the `serverless-http` adapter to translate API Gateway events to Express requests.
+We use the `serverless-http` adapter to translate API Gateway events to Express requests. This adapter library is unrelated to the Serverless Framework.
 
 ## Usage
 

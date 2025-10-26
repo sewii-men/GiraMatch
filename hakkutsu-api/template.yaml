@@ -58,6 +58,13 @@ Resources:
           CHECKINS_TABLE: !Ref CheckinsTable
           REVIEWS_TABLE: !Ref ReviewsTable
           REPORTS_TABLE: !Ref ReportsTable
+          RECRUITMENTS_TABLE: !Ref RecruitmentsTable
+          REQUESTS_TABLE: !Ref RequestsTable
+          RESTAURANTS_TABLE: !Ref RestaurantsTable
+          POST_MATCH_CHATS_TABLE: !Ref PostMatchChatsTable
+          POST_MATCH_CHAT_MESSAGES_TABLE: !Ref PostMatchChatMessagesTable
+          RESTAURANT_SHARES_TABLE: !Ref RestaurantSharesTable
+          CHAT_PARTICIPANTS_TABLE: !Ref ChatParticipantsTable
           JWT_SECRET: !Ref JwtSecret
           # ALLOWED_ORIGINS can be passed as a CSV env var if needed
           ALLOWED_ORIGINS: !Join [',', !Ref AllowedOrigins]
@@ -76,6 +83,20 @@ Resources:
             TableName: !Ref ReviewsTable
         - DynamoDBCrudPolicy:
             TableName: !Ref ReportsTable
+        - DynamoDBCrudPolicy:
+            TableName: !Ref RecruitmentsTable
+        - DynamoDBCrudPolicy:
+            TableName: !Ref RequestsTable
+        - DynamoDBCrudPolicy:
+            TableName: !Ref RestaurantsTable
+        - DynamoDBCrudPolicy:
+            TableName: !Ref PostMatchChatsTable
+        - DynamoDBCrudPolicy:
+            TableName: !Ref PostMatchChatMessagesTable
+        - DynamoDBCrudPolicy:
+            TableName: !Ref RestaurantSharesTable
+        - DynamoDBCrudPolicy:
+            TableName: !Ref ChatParticipantsTable
 
   UsersTable:
     Type: AWS::DynamoDB::Table
@@ -168,6 +189,124 @@ Resources:
       KeySchema:
         - AttributeName: reportId
           KeyType: HASH
+
+  RecruitmentsTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub recruitments-table-${StageName}
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: id
+          AttributeType: S
+        - AttributeName: recruiterId
+          AttributeType: S
+      KeySchema:
+        - AttributeName: id
+          KeyType: HASH
+      GlobalSecondaryIndexes:
+        - IndexName: RecruiterIdIndex
+          KeySchema:
+            - AttributeName: recruiterId
+              KeyType: HASH
+          Projection:
+            ProjectionType: ALL
+
+  RequestsTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub requests-table-${StageName}
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: id
+          AttributeType: S
+        - AttributeName: recruiterId
+          AttributeType: S
+        - AttributeName: requesterId
+          AttributeType: S
+      KeySchema:
+        - AttributeName: id
+          KeyType: HASH
+      GlobalSecondaryIndexes:
+        - IndexName: RecruiterIdIndex
+          KeySchema:
+            - AttributeName: recruiterId
+              KeyType: HASH
+          Projection:
+            ProjectionType: ALL
+        - IndexName: RequesterIdIndex
+          KeySchema:
+            - AttributeName: requesterId
+              KeyType: HASH
+          Projection:
+            ProjectionType: ALL
+
+  RestaurantsTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub restaurants-table-${StageName}
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: restaurant_id
+          AttributeType: S
+      KeySchema:
+        - AttributeName: restaurant_id
+          KeyType: HASH
+
+  PostMatchChatsTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub post-match-chats-table-${StageName}
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: chat_id
+          AttributeType: S
+      KeySchema:
+        - AttributeName: chat_id
+          KeyType: HASH
+
+  PostMatchChatMessagesTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub post-match-chat-messages-table-${StageName}
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: chat_id
+          AttributeType: S
+        - AttributeName: message_id
+          AttributeType: S
+      KeySchema:
+        - AttributeName: chat_id
+          KeyType: HASH
+        - AttributeName: message_id
+          KeyType: RANGE
+
+  RestaurantSharesTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub restaurant-shares-table-${StageName}
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: share_id
+          AttributeType: S
+      KeySchema:
+        - AttributeName: share_id
+          KeyType: HASH
+
+  ChatParticipantsTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub chat-participants-table-${StageName}
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: chat_id
+          AttributeType: S
+        - AttributeName: user_id
+          AttributeType: S
+      KeySchema:
+        - AttributeName: chat_id
+          KeyType: HASH
+        - AttributeName: user_id
+          KeyType: RANGE
 
 Outputs:
   ApiUrl:

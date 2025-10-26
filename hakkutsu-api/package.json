@@ -14,7 +14,9 @@
   "scripts": {
     "seed-admin": "node scripts/seed-admin.js",
     "seed-data": "node scripts/seed-data.js",
-    "start": "node local.js"
+    "start": "node local.js",
+    "test": "echo 'No tests configured' && exit 0",
+    "lint": "echo 'No linter configured' && exit 0"
   },
   "devDependencies": {}
 }

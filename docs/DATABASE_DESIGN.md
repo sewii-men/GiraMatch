@@ -15,8 +15,8 @@
 ### なぜDynamoDBを選んだか
 
 1. **既存インフラとの親和性**
-   - Serverless Framework + AWS Lambdaとの統合が容易
-   - 既に環境が構築済み（serverless.yml、Docker Compose）
+- AWS SAM + AWS Lambda での運用に移行済み
+- 既に環境が構築済み（template.yaml、Docker Compose）
 
 2. **スケーラビリティ**
    - 自動スケーリング対応
@@ -639,7 +639,7 @@ const params = {
 ### 1. IAMロールの最小権限
 
 ```yaml
-# serverless.yml
+# template.yaml（AWS SAM）
 provider:
   iam:
     role:
@@ -672,7 +672,7 @@ provider:
 ### 1. Point-in-Time Recovery (PITR)
 
 ```yaml
-# serverless.yml
+# template.yaml（AWS SAM）
 resources:
   Resources:
     UsersTable:
