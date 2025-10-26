@@ -57,10 +57,23 @@ jobs:
         run: |
           set -euo pipefail
           echo "Probing $API_URL ..."
-          # Basic health endpoint
-          curl -fsSL "$API_URL/" | head -c 200
-          # Public list endpoint
-          curl -fsS -H 'Accept: application/json' "$API_URL/matches" | head -c 200
+          # Probe root (some gateways return 404 at root even when Lambda is up)
+          ROOT_STATUS=$(curl -sS -o root_resp.json -w "%{http_code}" "$API_URL/") || true
+          head -c 200 root_resp.json || true
+          echo
+          if [ "$ROOT_STATUS" != "200" ] && [ "$ROOT_STATUS" != "404" ]; then
+            echo "::error::Unexpected root status: $ROOT_STATUS (expected 200 or 404)"
+            exit 1
+          fi
+
+          # Probe a known public endpoint that should be 200
+          RECRUIT_STATUS=$(curl -sS -H 'Accept: application/json' -o recruit_resp.json -w "%{http_code}" "$API_URL/matching/recruitments") || true
+          head -c 200 recruit_resp.json || true
+          echo
+          if [ "$RECRUIT_STATUS" != "200" ]; then
+            echo "::error::/matching/recruitments unhealthy. HTTP $RECRUIT_STATUS"
+            exit 1
+          fi
 
       - name: Vercel auth check
         run: |
