@@ -1,9 +1,10 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import AuthGuard from "@/components/AuthGuard";
 import { useAuth } from "@/lib/auth";
+import { calculateAge, calculateAgeDifference } from "@/lib/utils";
 
 interface Recruitment {
   id: string;
@@ -20,29 +21,88 @@ interface Recruitment {
     gender?: string;
     icon?: string;
     trustScore?: number;
+    birthDate?: string;
   };
   requestSent?: boolean;
 }
 
+interface SentRequestSummary {
+  requestId: string;
+  opponent?: string;
+}
+
 export default function RecruitmentsPage() {
-  const { token } = useAuth();
+  const { token, userId, isReady } = useAuth();
   const [recruitments, setRecruitments] = useState<Recruitment[]>([]);
   const [filteredRecruitments, setFilteredRecruitments] = useState<Recruitment[]>([]);
   const [loading, setLoading] = useState(true);
+  const [requestingId, setRequestingId] = useState<string | null>(null);
+  const [cancellingId, setCancellingId] = useState<string | null>(null);
+  const [sentRequestsMap, setSentRequestsMap] = useState<Record<string, SentRequestSummary>>({});
   const [sortBy, setSortBy] = useState("date");
   const [genderFilter, setGenderFilter] = useState("all");
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedStyles, setSelectedStyles] = useState<string[]>([]);
   const [selectedSeats, setSelectedSeats] = useState<string[]>([]);
   const [venueFilter, setVenueFilter] = useState("all");
+  const [ageFilter, setAgeFilter] = useState(false);
+  const [currentUserBirthDate, setCurrentUserBirthDate] = useState<string | null>(null);
+
+  const sentRecruitmentIdSet = useMemo(
+    () => new Set(Object.keys(sentRequestsMap)),
+    [sentRequestsMap]
+  );
+
+  const fetchSentRequests = useCallback(async () => {
+    if (!token) {
+      setSentRequestsMap({});
+      return;
+    }
+    try {
+      const base = process.env.NEXT_PUBLIC_API_URL;
+      const res = await fetch(`${base}/matching/my-requests`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) {
+        console.warn("ユーザーのリクエスト履歴取得に失敗しました");
+        return;
+      }
+      const data = await res.json();
+      if (!Array.isArray(data)) {
+        setSentRequestsMap({});
+        return;
+      }
+      const map = data.reduce<Record<string, SentRequestSummary>>((acc, item) => {
+        if (
+          (item?.isRequested ?? true) &&
+          typeof item?.recruitmentId === "string" &&
+          typeof item?.requestId === "string"
+        ) {
+          acc[item.recruitmentId] = {
+            requestId: item.requestId,
+            opponent: item?.opponent || item?.matchName,
+          };
+        }
+        return acc;
+      }, {});
+      setSentRequestsMap(map);
+    } catch (err) {
+      console.error("ユーザーのリクエスト履歴取得時にエラー:", err);
+    }
+  }, [token]);
 
   useEffect(() => {
+    if (!isReady) return;
     fetchRecruitments();
-  }, []);
+    if (userId) {
+      fetchCurrentUserInfo();
+    }
+    fetchSentRequests();
+  }, [isReady, userId, token, fetchSentRequests]);
 
   useEffect(() => {
     applyFiltersAndSort();
-  }, [recruitments, sortBy, genderFilter, searchTerm, selectedStyles, selectedSeats, venueFilter]);
+  }, [recruitments, sortBy, genderFilter, searchTerm, selectedStyles, selectedSeats, venueFilter, ageFilter, currentUserBirthDate]);
 
   const fetchRecruitments = async () => {
     try {
@@ -54,12 +114,41 @@ export default function RecruitmentsPage() {
       if (!res.ok) throw new Error("募集一覧の取得に失敗しました");
 
       const data = await res.json();
-      setRecruitments(data);
+      console.log("📋 募集データ:", data);
+      if (data.length > 0) {
+        console.log("📋 最初の募集の詳細:", data[0]);
+        console.log("📋 募集者情報:", data[0]?.recruiter);
+        console.log("📋 募集者の誕生日:", data[0]?.recruiter?.birthDate);
+      }
+      const normalized = data.map((item: Recruitment) => ({
+        ...item,
+        requestSent: !!item.requestSent,
+      }));
+      setRecruitments(normalized);
     } catch (err) {
       console.error(err);
       alert("募集一覧の取得に失敗しました");
     } finally {
       setLoading(false);
+    }
+  };
+
+  const fetchCurrentUserInfo = async () => {
+    try {
+      const base = process.env.NEXT_PUBLIC_API_URL;
+      const res = await fetch(`${base}/users/${userId}`, {
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      });
+
+      if (!res.ok) return;
+
+      const data = await res.json();
+      console.log("👤 現在のユーザー情報:", data);
+      console.log("👤 現在のユーザーの誕生日:", data.birthDate);
+      console.log("👤 現在のユーザーの年齢:", calculateAge(data.birthDate));
+      setCurrentUserBirthDate(data.birthDate || null);
+    } catch (err) {
+      console.error("ユーザー情報の取得に失敗:", err);
     }
   };
 
@@ -74,6 +163,14 @@ export default function RecruitmentsPage() {
     // 会場フィルター
     if (venueFilter !== "all") {
       filtered = filtered.filter((r) => r.venue === venueFilter);
+    }
+
+    // 年齢差フィルター（±3歳）
+    if (ageFilter && currentUserBirthDate) {
+      filtered = filtered.filter((r) => {
+        const ageDiff = calculateAgeDifference(currentUserBirthDate, r.recruiter.birthDate);
+        return ageDiff !== null && ageDiff <= 3;
+      });
     }
 
     // 応援スタイルフィルター
@@ -142,12 +239,17 @@ export default function RecruitmentsPage() {
 
   const toggleSeat = (seat: string) => {
     setSelectedSeats((prev) =>
-      prev.includes(seat) ? prev.filter((s) => s !== seat) : [...prev, seat]
+        prev.includes(seat) ? prev.filter((s) => s !== seat) : [...prev, seat]
     );
   };
 
   const handleSendRequest = async (recruitmentId: string) => {
     try {
+      if (!token) {
+        alert("リクエストを送信するにはログインが必要です。");
+        return;
+      }
+      setRequestingId(recruitmentId);
       const base = process.env.NEXT_PUBLIC_API_URL;
       const res = await fetch(`${base}/matching/request`, {
         method: "POST",
@@ -158,13 +260,125 @@ export default function RecruitmentsPage() {
         body: JSON.stringify({ recruitmentId }),
       });
 
-      if (!res.ok) throw new Error("リクエスト送信に失敗しました");
+      if (res.status === 409) {
+        alert("この募集には既にリクエストを送信済みです。");
+        setRecruitments((prev) =>
+          prev.map((r) => (r.id === recruitmentId ? { ...r, requestSent: true } : r))
+        );
+        return;
+      }
+
+      if (!res.ok) {
+        const errorBody = await res.json().catch(() => ({}));
+        const message =
+          (errorBody && (errorBody.error || errorBody.message)) ||
+          "リクエスト送信に失敗しました";
+        throw new Error(message);
+      }
 
       alert("リクエストを送信しました！");
+      setRecruitments((prev) =>
+        prev.map((r) => (r.id === recruitmentId ? { ...r, requestSent: true } : r))
+      );
+      await fetchSentRequests();
       fetchRecruitments();
     } catch (err) {
       console.error(err);
-      alert("リクエスト送信に失敗しました");
+      const message = err instanceof Error ? err.message : "リクエスト送信に失敗しました";
+      alert(message);
+    } finally {
+      setRequestingId(null);
+    }
+  };
+
+  const cancelRequestOnServer = useCallback(
+    async ({ requestId, recruitmentId }: { requestId?: string; recruitmentId: string }) => {
+      if (!token) {
+        throw new Error("リクエストを取り消すにはログインが必要です。");
+      }
+      const base = process.env.NEXT_PUBLIC_API_URL;
+      const defaultError = "リクエストの取り消しに失敗しました";
+
+      const cancelByRecruitment = async () => {
+        const res = await fetch(`${base}/matching/request`, {
+          method: "DELETE",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({ recruitmentId }),
+        });
+        if (!res.ok) {
+          const errorBody = await res.json().catch(() => ({}));
+          const message =
+            (errorBody && (errorBody.error || errorBody.message)) || defaultError;
+          throw new Error(message);
+        }
+      };
+
+      if (requestId) {
+        const res = await fetch(`${base}/matching/requests/${requestId}`, {
+          method: "DELETE",
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        });
+        if (res.ok) {
+          return;
+        }
+        if (res.status !== 404) {
+          const errorBody = await res.json().catch(() => ({}));
+          const message =
+            (errorBody && (errorBody.error || errorBody.message)) || defaultError;
+          throw new Error(message);
+        }
+      }
+
+      await cancelByRecruitment();
+    },
+    [token]
+  );
+
+  const handleCancelRequest = async (recruitmentId: string, opponent: string) => {
+    if (!token) {
+      alert("リクエストを取り消すにはログインが必要です。");
+      return;
+    }
+
+    const requestInfo = sentRequestsMap[recruitmentId];
+    const opponentLabel = opponent || requestInfo?.opponent || "この募集";
+    if (
+      !confirm(
+        `「${opponentLabel}」へのリクエストを取り消しますか？\n\n再度参加したい場合は募集一覧から改めてリクエストを送信できます。`
+      )
+    ) {
+      return;
+    }
+
+    try {
+      setCancellingId(recruitmentId);
+      await cancelRequestOnServer({
+        requestId: requestInfo?.requestId,
+        recruitmentId,
+      });
+
+      alert("リクエストを取り消しました");
+      setRecruitments((prev) =>
+        prev.map((r) => (r.id === recruitmentId ? { ...r, requestSent: false } : r))
+      );
+      setSentRequestsMap((prev) => {
+        const updated = { ...prev };
+        delete updated[recruitmentId];
+        return updated;
+      });
+      await fetchSentRequests();
+      fetchRecruitments();
+    } catch (err) {
+      console.error(err);
+      const message = err instanceof Error ? err.message : "リクエストの取り消しに失敗しました";
+      alert(message);
+    } finally {
+      setCancellingId(null);
     }
   };
 
@@ -200,7 +414,7 @@ export default function RecruitmentsPage() {
             </div>
 
             {/* 基本フィルターとソート */}
-            <div className="grid md:grid-cols-3 gap-4 mb-6">
+            <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
               {/* 性別フィルター */}
               <div>
                 <label className="block text-sm font-bold text-gray-700 mb-2">
@@ -248,6 +462,25 @@ export default function RecruitmentsPage() {
                     その他
                   </button>
                 </div>
+              </div>
+
+              {/* 年齢フィルター */}
+              <div>
+                <label className="block text-sm font-bold text-gray-700 mb-2">
+                  年齢 {currentUserBirthDate && `(あなた: ${calculateAge(currentUserBirthDate)}歳)`}
+                </label>
+                <button
+                  onClick={() => setAgeFilter(!ageFilter)}
+                  disabled={!currentUserBirthDate}
+                  className={`px-4 py-2 rounded-lg transition text-sm ${
+                    ageFilter
+                      ? "bg-red-600 text-white font-bold"
+                      : "bg-gray-200 text-gray-700 hover:bg-gray-300"
+                  } ${!currentUserBirthDate ? "opacity-50 cursor-not-allowed" : ""}`}
+                >
+                  {ageFilter && "✓ "}
+                  年齢が近い人（±3歳）
+                </button>
               </div>
 
               {/* 会場フィルター */}
@@ -333,16 +566,17 @@ export default function RecruitmentsPage() {
             </div>
 
             {/* 選択中のフィルター表示 */}
-            {(selectedStyles.length > 0 || selectedSeats.length > 0) && (
+            {(selectedStyles.length > 0 || selectedSeats.length > 0 || ageFilter) && (
               <div className="mt-4 pt-4 border-t-2 border-gray-200">
                 <div className="flex items-center justify-between">
                   <p className="text-sm text-gray-600">
-                    {selectedStyles.length + selectedSeats.length} 個の条件で絞り込み中
+                    {selectedStyles.length + selectedSeats.length + (ageFilter ? 1 : 0)} 個の条件で絞り込み中
                   </p>
                   <button
                     onClick={() => {
                       setSelectedStyles([]);
                       setSelectedSeats([]);
+                      setAgeFilter(false);
                     }}
                     className="text-sm text-red-600 hover:text-red-700 font-bold"
                   >
@@ -376,11 +610,16 @@ export default function RecruitmentsPage() {
 
               {filteredRecruitments.length > 0 ? (
                 <div className="space-y-6">
-                  {filteredRecruitments.map((recruitment) => (
-                    <div
-                      key={recruitment.id}
-                      className="bg-white border-2 border-yellow-400 rounded-xl p-6 shadow-lg"
-                    >
+                  {filteredRecruitments.map((recruitment) => {
+                    const isOwnRecruitment =
+                      !!userId && recruitment.recruiter.userId === userId;
+                    const hasRequested =
+                      recruitment.requestSent || sentRecruitmentIdSet.has(recruitment.id);
+                    return (
+                      <div
+                        key={recruitment.id}
+                        className="bg-white border-2 border-yellow-400 rounded-xl p-6 shadow-lg"
+                      >
                       {/* 募集者情報 */}
                       <div className="flex items-start justify-between mb-4 pb-4 border-b-2 border-gray-100">
                         <div className="flex items-center gap-4">
@@ -388,9 +627,16 @@ export default function RecruitmentsPage() {
                             {recruitment.recruiter.icon || "👤"}
                           </div>
                           <div>
-                            <h3 className="text-xl font-bold text-black">
-                              {recruitment.recruiter.nickname}
-                            </h3>
+                            <div className="flex items-center gap-2">
+                              <h3 className="text-xl font-bold text-black">
+                                {recruitment.recruiter.nickname}
+                              </h3>
+                              {calculateAge(recruitment.recruiter.birthDate) !== null && (
+                                <span className="text-lg text-gray-600">
+                                  ({calculateAge(recruitment.recruiter.birthDate)}歳)
+                                </span>
+                              )}
+                            </div>
                             <div className="flex items-center gap-3 mt-1">
                               {recruitment.recruiter.gender && (
                                 <span className="text-sm text-gray-600">
@@ -455,20 +701,43 @@ export default function RecruitmentsPage() {
                       </div>
 
                       {/* アクション */}
-                      {recruitment.requestSent ? (
-                        <div className="bg-green-100 border-2 border-green-400 text-green-700 px-4 py-3 rounded-lg text-center font-bold">
-                          リクエスト送信済み ✓
+                      {isOwnRecruitment ? (
+                        <div className="bg-gray-100 border-2 border-gray-300 text-gray-700 px-4 py-3 rounded-lg text-center text-sm">
+                          これはあなたの募集です。リクエストは送信できません。
+                        </div>
+                      ) : hasRequested ? (
+                        <div className="space-y-2">
+                          <button
+                            onClick={() => handleCancelRequest(recruitment.id, recruitment.opponent)}
+                            disabled={cancellingId === recruitment.id || !isReady}
+                            className={`w-full py-3 rounded-full font-bold transition text-lg ${
+                              cancellingId === recruitment.id || !isReady
+                                ? "bg-green-400 text-white cursor-not-allowed"
+                                : "bg-green-600 text-white hover:bg-green-700"
+                            }`}
+                          >
+                            {cancellingId === recruitment.id ? "取り消し中..." : "リクエスト済み ✓（取り消す）"}
+                          </button>
+                          <p className="text-center text-sm text-gray-600">
+                            再度参加したい場合はキャンセル後に改めてリクエストを送ってください
+                          </p>
                         </div>
                       ) : (
                         <button
                           onClick={() => handleSendRequest(recruitment.id)}
-                          className="w-full bg-red-600 text-white py-3 rounded-full font-bold hover:bg-red-700 transition text-lg"
+                          disabled={requestingId === recruitment.id || !isReady}
+                          className={`w-full py-3 rounded-full font-bold transition text-lg ${
+                            requestingId === recruitment.id || !isReady
+                              ? "bg-gray-400 text-white cursor-not-allowed"
+                              : "bg-red-600 text-white hover:bg-red-700"
+                          }`}
                         >
-                          参加リクエストを送る
+                          {requestingId === recruitment.id ? "送信中..." : "参加リクエストを送る"}
                         </button>
                       )}
                     </div>
-                  ))}
+                  );
+                  })}
                 </div>
               ) : (
                 <div className="bg-white rounded-xl p-12 text-center">
@@ -477,7 +746,8 @@ export default function RecruitmentsPage() {
                     genderFilter !== "all" ||
                     venueFilter !== "all" ||
                     selectedStyles.length > 0 ||
-                    selectedSeats.length > 0
+                    selectedSeats.length > 0 ||
+                    ageFilter
                       ? "条件に一致する募集が見つかりません。フィルターを変更してみてください。"
                       : "現在募集はありません"}
                   </p>

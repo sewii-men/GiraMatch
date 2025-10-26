@@ -23,6 +23,7 @@ interface MyRecruitment {
 const statusColorMap: Record<string, string> = {
   active: "bg-green-100 text-green-700 border-green-200",
   closed: "bg-gray-100 text-gray-600 border-gray-200",
+  cancelled: "bg-red-100 text-red-700 border-red-200",
   draft: "bg-yellow-100 text-yellow-700 border-yellow-200",
 };
 
@@ -32,8 +33,10 @@ export default function MyRecruitmentsPage() {
   const [filteredRecruitments, setFilteredRecruitments] = useState<MyRecruitment[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [statusFilter, setStatusFilter] = useState<"all" | "active" | "closed">("all");
+  const [statusFilter, setStatusFilter] = useState<"all" | "active" | "closed" | "cancelled">("all");
   const [searchTerm, setSearchTerm] = useState("");
+  const [cancellingId, setCancellingId] = useState<string | null>(null);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
 
   const fetchRecruitments = useCallback(async () => {
     if (!token) return;
@@ -89,6 +92,70 @@ export default function MyRecruitmentsPage() {
   const formatDate = (value: string) => {
     const date = value ? new Date(value) : null;
     return date ? date.toLocaleString("ja-JP", { dateStyle: "short", timeStyle: "short" }) : "-";
+  };
+
+  const handleCancelRecruitment = async (recruitmentId: string, opponent: string) => {
+    if (!confirm(`「${opponent}」の募集を取り消しますか？\n\nこの操作は取り消せません。`)) {
+      return;
+    }
+
+    try {
+      setCancellingId(recruitmentId);
+      const base = process.env.NEXT_PUBLIC_API_URL;
+      const res = await fetch(`${base}/matching/my-recruitments/${recruitmentId}`, {
+        method: "DELETE",
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+
+      if (!res.ok) {
+        const errorData = await res.json().catch(() => ({}));
+        throw new Error(errorData.error || "募集の取り消しに失敗しました");
+      }
+
+      alert("募集を取り消しました");
+      // 募集一覧を再取得
+      await fetchRecruitments();
+    } catch (err) {
+      console.error(err);
+      const message = err instanceof Error ? err.message : "募集の取り消しに失敗しました";
+      alert(message);
+    } finally {
+      setCancellingId(null);
+    }
+  };
+
+  const handleDeleteRecruitment = async (recruitmentId: string, opponent: string) => {
+    if (!confirm(`「${opponent}」の募集を削除しますか？\n\nこの操作は取り消せません。`)) {
+      return;
+    }
+
+    try {
+      setDeletingId(recruitmentId);
+      const base = process.env.NEXT_PUBLIC_API_URL;
+      const res = await fetch(`${base}/matching/my-recruitments/${recruitmentId}/permanent`, {
+        method: "DELETE",
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+
+      if (!res.ok) {
+        const errorData = await res.json().catch(() => ({}));
+        throw new Error(errorData.error || "募集の削除に失敗しました");
+      }
+
+      alert("募集を削除しました");
+      // 募集一覧を再取得
+      await fetchRecruitments();
+    } catch (err) {
+      console.error(err);
+      const message = err instanceof Error ? err.message : "募集の削除に失敗しました";
+      alert(message);
+    } finally {
+      setDeletingId(null);
+    }
   };
 
   return (
@@ -179,6 +246,16 @@ export default function MyRecruitmentsPage() {
                 >
                   終了
                 </button>
+                <button
+                  onClick={() => setStatusFilter("cancelled")}
+                  className={`px-4 py-2 rounded-lg border-2 ${
+                    statusFilter === "cancelled"
+                      ? "border-red-600 bg-red-50 text-red-700 font-bold"
+                      : "border-gray-200 text-gray-700 hover:border-gray-400"
+                  }`}
+                >
+                  取り消し済み
+                </button>
               </div>
             </div>
           </div>
@@ -228,7 +305,7 @@ export default function MyRecruitmentsPage() {
                       )}
                     </div>
                     <span className={`inline-flex items-center px-3 py-1 rounded-full border text-sm font-bold ${statusClass}`}>
-                      {status === "active" ? "募集中" : status === "closed" ? "終了" : status}
+                      {status === "active" ? "募集中" : status === "closed" ? "終了" : status === "cancelled" ? "取り消し済み" : status}
                     </span>
                   </div>
                   <div className="grid gap-3 md:grid-cols-2">
@@ -277,6 +354,32 @@ export default function MyRecruitmentsPage() {
                         >
                           リクエスト管理
                         </Link>
+                        {status === "active" && (
+                          <button
+                            onClick={() => handleCancelRecruitment(recruitment.id, recruitment.opponent)}
+                            disabled={cancellingId === recruitment.id}
+                            className={`w-full px-4 py-2 rounded-full text-sm font-bold transition ${
+                              cancellingId === recruitment.id
+                                ? "bg-gray-300 text-gray-500 cursor-not-allowed"
+                                : "bg-white border-2 border-red-600 text-red-600 hover:bg-red-50"
+                            }`}
+                          >
+                            {cancellingId === recruitment.id ? "取り消し中..." : "募集を取り消す"}
+                          </button>
+                        )}
+                        {status === "cancelled" && (
+                          <button
+                            onClick={() => handleDeleteRecruitment(recruitment.id, recruitment.opponent)}
+                            disabled={deletingId === recruitment.id}
+                            className={`w-full px-4 py-2 rounded-full text-sm font-bold transition ${
+                              deletingId === recruitment.id
+                                ? "bg-gray-300 text-gray-500 cursor-not-allowed"
+                                : "bg-gray-600 text-white hover:bg-gray-700"
+                            }`}
+                          >
+                            {deletingId === recruitment.id ? "削除中..." : "削除"}
+                          </button>
+                        )}
                       </div>
                     </div>
                   </div>

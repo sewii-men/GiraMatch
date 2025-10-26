@@ -149,6 +149,18 @@ function requireSystemAuth(req, res, next) {
   return next();
 }
 
+function getUserIdFromRequest(req) {
+  try {
+    const h = req.headers["authorization"] || req.headers["Authorization"];
+    if (!h || typeof h !== "string" || !h.startsWith("Bearer ")) return null;
+    const token = h.slice("Bearer ".length).trim();
+    const payload = jwt.verify(token, JWT_SECRET);
+    return payload.sub || null;
+  } catch {
+    return null;
+  }
+}
+
 function mapRestaurantItem(item) {
   if (!item) return null;
   return {
@@ -312,14 +324,22 @@ app.get("/admin/stats", requireAdmin, async (req, res) => {
 
 // 登録
 app.post("/auth/register", async (req, res) => {
-  const { userId, name, password } = req.body || {};
-  if (!userId || !name || !password) return res.status(400).json({ error: "userId, name, password are required" });
+  const { userId, name, password, birthDate } = req.body || {};
+  if (!userId || !name || !password || !birthDate) return res.status(400).json({ error: "userId, name, password, birthDate are required" });
   const idErr = validateUserId(userId);
   if (idErr) return res.status(400).json({ error: idErr });
   const nameErr = validateDisplayName(name);
   if (nameErr) return res.status(400).json({ error: nameErr });
   const pwErr = validatePassword(password);
   if (pwErr) return res.status(400).json({ error: pwErr });
+  const birthDateObj = new Date(birthDate);
+  const today = new Date();
+  if (!birthDate || typeof birthDate !== "string" || isNaN(birthDateObj.getTime()) || birthDateObj > today) {
+    return res.status(400).json({ error: "有効な誕生日を入力してください" });
+  }
+  const minDate = new Date();
+  minDate.setFullYear(today.getFullYear() - 150);
+  if (birthDateObj < minDate) return res.status(400).json({ error: "誕生日が無効です" });
   try {
     const exist = await docClient.send(new GetCommand({ TableName: USERS_TABLE, Key: { userId } }));
     if (exist.Item) return res.status(409).json({ error: "User already exists" });
@@ -328,6 +348,7 @@ app.post("/auth/register", async (req, res) => {
       userId,
       name,
       passwordHash,
+      birthDate,
       isAdmin: false,  // デフォルトは管理者権限なし
       createdAt: new Date().toISOString()
     };
@@ -434,6 +455,9 @@ app.post("/matching/recruit", requireAuth, async (req, res) => {
       recruiterGender: userData.Item.gender,
       recruiterIcon: userData.Item.icon,
       recruiterTrustScore: userData.Item.trustScore || 0,
+      recruiterBirthDate: userData.Item.birthDate,
+      recruiterStyle: userData.Item.style,
+      recruiterSeat: userData.Item.seat,
       createdAt: new Date().toISOString(),
       status: "active"
     };
@@ -453,30 +477,62 @@ app.post("/matching/recruit", requireAuth, async (req, res) => {
 // 募集一覧を取得
 app.get("/matching/recruitments", async (req, res) => {
   try {
+    const currentUserId = getUserIdFromRequest(req);
+    let requestedRecruitmentIds = new Set();
+
+    if (currentUserId) {
+      const requestsData = await docClient.send(new ScanCommand({
+        TableName: REQUESTS_TABLE
+      }));
+
+      requestedRecruitmentIds = new Set(
+        (requestsData.Items || [])
+          .filter((req) => req.requesterId === currentUserId && (req.isRequested ?? true))
+          .map((req) => req.recruitmentId)
+      );
+
+      console.log("✅ 認証済みユーザーのリクエスト数:", requestedRecruitmentIds.size);
+    }
+
     const data = await docClient.send(new ScanCommand({
       TableName: RECRUITMENTS_TABLE
     }));
 
+    console.log("📋 DynamoDBから取得した募集データ件数:", data.Items?.length);
+    if (data.Items && data.Items.length > 0) {
+      console.log("📋 最初の募集の生データ:", JSON.stringify(data.Items[0], null, 2));
+    }
+
     const activeRecruitments = (data.Items || [])
       .filter(r => r.status === "active")
-      .map(r => ({
-        id: r.id,
-        matchId: r.matchId,
-        opponent: r.opponent,
-        date: r.date,
-        time: r.time,
-        venue: r.venue,
-        conditions: r.conditions || [],
-        message: r.message,
-        recruiter: {
-          userId: r.recruiterId,
-          nickname: r.recruiterNickname,
-          gender: r.recruiterGender,
-          icon: r.recruiterIcon,
-          trustScore: r.recruiterTrustScore
-        },
-        createdAt: r.createdAt
-      }));
+      .map(r => {
+        console.log(`📋 募集ID ${r.id} の recruiterBirthDate:`, r.recruiterBirthDate);
+        return {
+          id: r.id,
+          matchId: r.matchId,
+          opponent: r.opponent,
+          date: r.date,
+          time: r.time,
+          venue: r.venue,
+          conditions: r.conditions || [],
+          message: r.message,
+          recruiter: {
+            userId: r.recruiterId,
+            nickname: r.recruiterNickname,
+            gender: r.recruiterGender,
+            icon: r.recruiterIcon,
+            trustScore: r.recruiterTrustScore,
+            birthDate: r.recruiterBirthDate
+          },
+          createdAt: r.createdAt,
+          requestSent: requestedRecruitmentIds.has(r.id)
+        };
+      });
+
+    console.log("📋 返却する募集データ件数:", activeRecruitments.length);
+    if (activeRecruitments.length > 0) {
+      console.log("📋 最初の募集のレスポンス:", JSON.stringify(activeRecruitments[0], null, 2));
+    }
 
     res.json(activeRecruitments);
   } catch (error) {
@@ -523,6 +579,126 @@ app.get("/matching/my-recruitments", requireAuth, async (req, res) => {
   } catch (error) {
     console.error(error);
     res.status(500).json({ error: "Could not fetch my recruitments" });
+  }
+});
+
+// 自分が送ったリクエスト一覧を取得
+app.get("/matching/my-requests", requireAuth, async (req, res) => {
+  try {
+    const userId = req.user.userId;
+    const requestsData = await docClient.send(new ScanCommand({
+      TableName: REQUESTS_TABLE
+    }));
+
+    const myRequests = (requestsData.Items || []).filter(
+      (req) => req.requesterId === userId && (req.isRequested ?? true)
+    );
+
+    if (!myRequests.length) {
+      return res.json([]);
+    }
+
+    const recruitmentIds = [...new Set(myRequests.map((req) => req.recruitmentId))];
+    const recruitmentMap = {};
+
+    for (let i = 0; i < recruitmentIds.length; i += 100) {
+      const chunk = recruitmentIds.slice(i, i + 100);
+      const batchResult = await docClient.send(new BatchGetCommand({
+        RequestItems: {
+          [RECRUITMENTS_TABLE]: {
+            Keys: chunk.map((id) => ({ id }))
+          }
+        }
+      }));
+      (batchResult.Responses?.[RECRUITMENTS_TABLE] || []).forEach((item) => {
+        recruitmentMap[item.id] = item;
+      });
+    }
+
+    const recruiterIds = [...new Set(myRequests.map((req) => req.recruiterId).filter(Boolean))];
+    const recruiterProfiles = {};
+
+    for (let i = 0; i < recruiterIds.length; i += 100) {
+      const chunk = recruiterIds.slice(i, i + 100);
+      const batchResult = await docClient.send(new BatchGetCommand({
+        RequestItems: {
+          [USERS_TABLE]: {
+            Keys: chunk.map((id) => ({ userId: id }))
+          }
+        }
+      }));
+      (batchResult.Responses?.[USERS_TABLE] || []).forEach((item) => {
+        recruiterProfiles[item.userId] = item;
+      });
+    }
+
+    const response = myRequests
+      .map((req) => {
+        const recruitment = recruitmentMap[req.recruitmentId] || {};
+        const recruiterProfile = recruiterProfiles[req.recruiterId] || {};
+        const fallbackRecruiter = {
+          nickname: recruitment.recruiterNickname || req.recruiterNickname,
+          gender: recruitment.recruiterGender ?? req.recruiterGender ?? null,
+          icon: recruitment.recruiterIcon || req.recruiterIcon,
+          trustScore: recruitment.recruiterTrustScore ?? req.recruiterTrustScore ?? null,
+          birthDate: recruitment.recruiterBirthDate || req.recruiterBirthDate || null,
+          style: recruitment.recruiterStyle || req.recruiterStyle || null,
+          seat: recruitment.recruiterSeat || req.recruiterSeat || null,
+        };
+        const fallbackRequester = {
+          nickname: req.requesterNickname,
+          gender: req.requesterGender,
+          icon: req.requesterIcon,
+          trustScore: req.requesterTrustScore,
+          birthDate: req.requesterBirthDate,
+          style: req.requesterStyle,
+          seat: req.requesterSeat,
+        };
+        return {
+          requestId: req.id,
+          recruitmentId: req.recruitmentId,
+          matchId: req.matchId,
+          status: req.status || "pending",
+          createdAt: req.createdAt,
+          isRequested: req.isRequested ?? true,
+          opponent: recruitment.opponent || "",
+          date: recruitment.date || "",
+          time: recruitment.time || "",
+          venue: recruitment.venue || "",
+          message: recruitment.message || "",
+          conditions: recruitment.conditions || [],
+          recruiter: {
+            userId: req.recruiterId,
+            nickname:
+              recruiterProfile.nickname ||
+              recruiterProfile.name ||
+              fallbackRecruiter.nickname ||
+              req.recruiterId,
+            gender: recruiterProfile.gender ?? fallbackRecruiter.gender ?? null,
+            icon: recruiterProfile.icon || fallbackRecruiter.icon || "👤",
+            trustScore: recruiterProfile.trustScore ?? fallbackRecruiter.trustScore ?? null,
+            birthDate: recruiterProfile.birthDate ?? fallbackRecruiter.birthDate ?? null,
+            style: recruiterProfile.style ?? fallbackRecruiter.style ?? null,
+            seat: recruiterProfile.seat ?? fallbackRecruiter.seat ?? null,
+          },
+          requester: {
+            userId: req.requesterId,
+            nickname: fallbackRequester.nickname || req.requesterId,
+            gender: fallbackRequester.gender ?? null,
+            icon: fallbackRequester.icon || "👤",
+            trustScore: fallbackRequester.trustScore ?? null,
+            birthDate: fallbackRequester.birthDate ?? null,
+            style: fallbackRequester.style ?? null,
+            seat: fallbackRequester.seat ?? null,
+          },
+        };
+      })
+      .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+
+    res.json(response);
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: "Could not fetch my requests" });
   }
 });
 
@@ -575,6 +751,106 @@ app.get("/matching/my-recruitments/:recruitmentId", requireAuth, async (req, res
   }
 });
 
+// 募集を取り消す（キャンセル）
+app.delete("/matching/my-recruitments/:recruitmentId", requireAuth, async (req, res) => {
+  try {
+    const userId = req.user.userId;
+    const { recruitmentId } = req.params;
+
+    // 募集を取得して所有者を確認
+    const { Item } = await docClient.send(new GetCommand({
+      TableName: RECRUITMENTS_TABLE,
+      Key: { id: recruitmentId }
+    }));
+
+    if (!Item) {
+      return res.status(404).json({ error: "Recruitment not found" });
+    }
+
+    if (Item.recruiterId !== userId) {
+      return res.status(403).json({ error: "Forbidden: You can only cancel your own recruitments" });
+    }
+
+    // 既にキャンセル済みの場合
+    if (Item.status === "cancelled") {
+      return res.status(400).json({ error: "Recruitment is already cancelled" });
+    }
+
+    // statusをcancelledに更新
+    await docClient.send(new UpdateCommand({
+      TableName: RECRUITMENTS_TABLE,
+      Key: { id: recruitmentId },
+      UpdateExpression: "SET #status = :cancelled, updatedAt = :now",
+      ExpressionAttributeNames: {
+        "#status": "status"
+      },
+      ExpressionAttributeValues: {
+        ":cancelled": "cancelled",
+        ":now": new Date().toISOString()
+      }
+    }));
+
+    res.json({
+      success: true,
+      message: "Recruitment cancelled successfully",
+      recruitmentId
+    });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: "Could not cancel recruitment" });
+  }
+});
+
+// 取り消し済みの募集を削除（論理削除）
+app.delete("/matching/my-recruitments/:recruitmentId/permanent", requireAuth, async (req, res) => {
+  try {
+    const userId = req.user.userId;
+    const { recruitmentId } = req.params;
+
+    // 募集を取得して所有者を確認
+    const { Item } = await docClient.send(new GetCommand({
+      TableName: RECRUITMENTS_TABLE,
+      Key: { id: recruitmentId }
+    }));
+
+    if (!Item) {
+      return res.status(404).json({ error: "Recruitment not found" });
+    }
+
+    if (Item.recruiterId !== userId) {
+      return res.status(403).json({ error: "Forbidden: You can only delete your own recruitments" });
+    }
+
+    // キャンセル済みの募集のみ削除可能
+    if (Item.status !== "cancelled") {
+      return res.status(400).json({ error: "Only cancelled recruitments can be deleted" });
+    }
+
+    // statusをdeletedに更新
+    await docClient.send(new UpdateCommand({
+      TableName: RECRUITMENTS_TABLE,
+      Key: { id: recruitmentId },
+      UpdateExpression: "SET #status = :deleted, deletedAt = :now",
+      ExpressionAttributeNames: {
+        "#status": "status"
+      },
+      ExpressionAttributeValues: {
+        ":deleted": "deleted",
+        ":now": new Date().toISOString()
+      }
+    }));
+
+    res.json({
+      success: true,
+      message: "Recruitment deleted successfully",
+      recruitmentId
+    });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: "Could not delete recruitment" });
+  }
+});
+
 // 自分の募集に届いたリクエスト一覧
 app.get("/matching/my-recruitments/:recruitmentId/requests", requireAuth, async (req, res) => {
   try {
@@ -617,6 +893,15 @@ app.get("/matching/my-recruitments/:recruitmentId/requests", requireAuth, async 
     const requests = relevantRequests
       .map((req) => {
         const profile = requesterProfiles[req.requesterId] || {};
+        const fallbackRequester = {
+          nickname: req.requesterNickname,
+          gender: req.requesterGender,
+          icon: req.requesterIcon,
+          trustScore: req.requesterTrustScore,
+          style: req.requesterStyle,
+          seat: req.requesterSeat,
+          birthDate: req.requesterBirthDate,
+        };
         return {
           id: req.id,
           recruitmentId: req.recruitmentId,
@@ -626,12 +911,13 @@ app.get("/matching/my-recruitments/:recruitmentId/requests", requireAuth, async 
           createdAt: req.createdAt,
           requester: {
             userId: req.requesterId,
-            nickname: profile.nickname || profile.name || req.requesterId,
-            gender: profile.gender,
-            icon: profile.icon,
-            trustScore: profile.trustScore,
-            style: profile.style,
-            seat: profile.seat,
+            nickname: profile.nickname || profile.name || fallbackRequester.nickname || req.requesterId,
+            gender: profile.gender ?? fallbackRequester.gender ?? null,
+            icon: profile.icon || fallbackRequester.icon || "👤",
+            trustScore: profile.trustScore ?? fallbackRequester.trustScore ?? null,
+            style: profile.style ?? fallbackRequester.style ?? null,
+            seat: profile.seat ?? fallbackRequester.seat ?? null,
+            birthDate: profile.birthDate ?? fallbackRequester.birthDate ?? null,
           },
         };
       })
@@ -658,6 +944,65 @@ app.get("/matching/my-recruitments/:recruitmentId/requests", requireAuth, async 
   }
 });
 
+async function findRequestById(requestId) {
+  if (!requestId) return null;
+  const { Item } = await docClient.send(
+    new GetCommand({
+      TableName: REQUESTS_TABLE,
+      Key: { id: requestId },
+    })
+  );
+  if (Item) return Item;
+
+  const fallback = await docClient.send(
+    new ScanCommand({
+      TableName: REQUESTS_TABLE,
+      FilterExpression: "#id = :requestId OR requestId = :requestId",
+      ExpressionAttributeNames: { "#id": "id" },
+      ExpressionAttributeValues: { ":requestId": requestId },
+      Limit: 1,
+    })
+  );
+  return (fallback.Items && fallback.Items[0]) || null;
+}
+
+async function findActiveRequestByRecruitment(recruitmentId, requesterId) {
+  if (!recruitmentId || !requesterId) return null;
+  const data = await docClient.send(
+    new ScanCommand({
+      TableName: REQUESTS_TABLE,
+    })
+  );
+  return (data.Items || []).find(
+    (req) =>
+      req.recruitmentId === recruitmentId &&
+      req.requesterId === requesterId &&
+      (req.isRequested ?? true)
+  );
+}
+
+async function cancelRequestRecord(requestId) {
+  if (!requestId) {
+    throw new Error("requestId is required to cancel a request");
+  }
+  const now = new Date().toISOString();
+  await docClient.send(
+    new UpdateCommand({
+      TableName: REQUESTS_TABLE,
+      Key: { id: requestId },
+      UpdateExpression: "SET isRequested = :false, #status = :status, cancelledAt = :now",
+      ExpressionAttributeNames: {
+        "#status": "status",
+      },
+      ExpressionAttributeValues: {
+        ":false": false,
+        ":status": "cancelled",
+        ":now": now,
+      },
+    })
+  );
+}
+
 // 参加リクエストを送信
 app.post("/matching/request", requireAuth, async (req, res) => {
   try {
@@ -682,6 +1027,26 @@ app.post("/matching/request", requireAuth, async (req, res) => {
       return res.status(400).json({ error: "Cannot request your own recruitment" });
     }
 
+    const { Item: requesterProfile } = await docClient.send(new GetCommand({
+      TableName: USERS_TABLE,
+      Key: { userId }
+    }));
+
+    if (!requesterProfile) {
+      return res.status(404).json({ error: "Requester profile not found" });
+    }
+
+    const existingRequests = await docClient.send(new ScanCommand({
+      TableName: REQUESTS_TABLE
+    }));
+    const alreadyRequested = (existingRequests.Items || []).some(
+      (req) => req.recruitmentId === recruitmentId && req.requesterId === userId && (req.isRequested ?? true)
+    );
+
+    if (alreadyRequested) {
+      return res.status(409).json({ error: "Request already sent for this recruitment" });
+    }
+
     const requestId = `request-${Date.now()}-${userId}`;
     const request = {
       id: requestId,
@@ -690,7 +1055,22 @@ app.post("/matching/request", requireAuth, async (req, res) => {
       recruiterId: recruitment.recruiterId,
       matchId: recruitment.matchId,
       status: "pending",
-      createdAt: new Date().toISOString()
+      createdAt: new Date().toISOString(),
+      isRequested: true,
+      requesterNickname: requesterProfile.nickname || requesterProfile.name || userId,
+      requesterGender: requesterProfile.gender || null,
+      requesterIcon: requesterProfile.icon || null,
+      requesterTrustScore: requesterProfile.trustScore ?? null,
+      requesterBirthDate: requesterProfile.birthDate || null,
+      requesterStyle: requesterProfile.style || null,
+      requesterSeat: requesterProfile.seat || null,
+      recruiterNickname: recruitment.recruiterNickname || null,
+      recruiterGender: recruitment.recruiterGender || null,
+      recruiterIcon: recruitment.recruiterIcon || null,
+      recruiterTrustScore: recruitment.recruiterTrustScore ?? null,
+      recruiterBirthDate: recruitment.recruiterBirthDate || null,
+      recruiterStyle: recruitment.recruiterStyle || null,
+      recruiterSeat: recruitment.recruiterSeat || null,
     };
 
     await docClient.send(new PutCommand({
@@ -702,6 +1082,54 @@ app.post("/matching/request", requireAuth, async (req, res) => {
   } catch (error) {
     console.error(error);
     res.status(500).json({ error: "Could not send request" });
+  }
+});
+
+// 送信済みリクエストを取り消し
+app.delete("/matching/requests/:requestId", requireAuth, async (req, res) => {
+  try {
+    const { requestId } = req.params;
+    const userId = req.user.userId;
+
+    const requestItem = await findRequestById(requestId);
+    if (!requestItem) {
+      return res.status(404).json({ error: "Request not found" });
+    }
+
+    if (requestItem.requesterId !== userId) {
+      return res.status(403).json({ error: "Forbidden" });
+    }
+
+    await cancelRequestRecord(requestItem.id || requestId);
+
+    res.json({ success: true });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: "Could not cancel request" });
+  }
+});
+
+// 送信済みリクエストを募集IDで取り消し（後方互換用）
+app.delete("/matching/request", requireAuth, async (req, res) => {
+  try {
+    const { recruitmentId } = req.body || {};
+    const userId = req.user.userId;
+    if (!recruitmentId) {
+      return res.status(400).json({ error: "recruitmentId is required" });
+    }
+
+    const requestItem = await findActiveRequestByRecruitment(recruitmentId, userId);
+    if (!requestItem) {
+      // 既に削除されている、または元々存在しない場合は成功として扱う
+      return res.json({ success: true, message: "Request not found or already cancelled" });
+    }
+
+    await cancelRequestRecord(requestItem.id || requestItem.requestId);
+
+    res.json({ success: true });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: "Could not cancel request" });
   }
 });
 
